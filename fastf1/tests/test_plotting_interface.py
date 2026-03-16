@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -949,3 +949,111 @@ class TestGetTeamNameByDriver:
 
             # Verify the result returns the short team name
             assert result == "Ferrari"
+
+
+class TestGetTeamName:
+    """Tests for get_team_name function."""
+
+    def test_get_team_name_full_name_default(self):
+        """Test get_team_name returns full team name when short=False (default)."""
+        # This test targets lines 233, 238
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Mercedes-AMG Petronas F1 Team",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+
+        # Mock _get_team
+        with patch('fastf1.plotting._interface._get_team', return_value=team1) as mock_get_team:
+            # Call the function with default parameters (short=False, exact_match=False)
+            result = get_team_name("Mercedes", mock_session)
+
+            # Verify _get_team was called with correct parameters
+            mock_get_team.assert_called_once_with("Mercedes", mock_session, exact_match=False)
+
+            # Verify the result returns the full team name
+            assert result == "Mercedes-AMG Petronas F1 Team"
+
+    def test_get_team_name_short_name(self):
+        """Test get_team_name returns short team name when short=True."""
+        # This test targets lines 233, 235, 236
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Scuderia Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+
+        # Mock _get_team
+        with patch('fastf1.plotting._interface._get_team', return_value=team1) as mock_get_team:
+            # Call the function with short=True
+            result = get_team_name("Ferrari", mock_session, short=True)
+
+            # Verify _get_team was called with correct parameters
+            mock_get_team.assert_called_once_with("Ferrari", mock_session, exact_match=False)
+
+            # Verify the result returns the short team name
+            assert result == "Ferrari"
+
+    def test_get_team_name_with_exact_match(self):
+        """Test get_team_name with exact_match=True passes parameter correctly."""
+        # This test targets lines 233, 238 with exact_match parameter
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Red Bull Racing",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+
+        # Mock _get_team
+        with patch('fastf1.plotting._interface._get_team', return_value=team1) as mock_get_team:
+            # Call the function with exact_match=True
+            result = get_team_name("red bull", mock_session, exact_match=True)
+
+            # Verify _get_team was called with exact_match=True
+            mock_get_team.assert_called_once_with("red bull", mock_session, exact_match=True)
+
+            # Verify the result returns the full team name
+            assert result == "Red Bull Racing"
+
+    def test_get_team_name_short_with_exact_match(self):
+        """Test get_team_name with both short=True and exact_match=True."""
+        # This test targets lines 233, 235, 236 with exact_match parameter
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="McLaren F1 Team",
+            normalized_name="mclaren",
+            short_name="McLaren",
+            colors=TeamColorConstants(official="#ff8700", fastf1="#ff8700")
+        )
+
+        # Mock _get_team
+        with patch('fastf1.plotting._interface._get_team', return_value=team1) as mock_get_team:
+            # Call the function with both short=True and exact_match=True
+            result = get_team_name("mclaren", mock_session, short=True, exact_match=True)
+
+            # Verify _get_team was called with correct parameters
+            mock_get_team.assert_called_once_with("mclaren", mock_session, exact_match=True)
+
+            # Verify the result returns the short team name
+            assert result == "McLaren"
