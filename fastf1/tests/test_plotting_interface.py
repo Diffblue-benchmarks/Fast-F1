@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name, _get_team_exact, _get_team_fuzzy, _get_driver_exact
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name, _get_team_exact, _get_team_fuzzy, _get_driver_exact, _get_driver_fuzzy
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -1494,3 +1494,232 @@ class TestGetTeamFuzzy:
 
             # Verify the correct team was returned
             assert result == team1
+
+
+class TestGetDriverFuzzy:
+    """Tests for _get_driver_fuzzy function."""
+
+    def test_exact_normalized_name_match(self):
+        """Test _get_driver_fuzzy when exact normalized name match is found."""
+        # This test targets lines 57, 58, 59, 62, 63, 66, 67
+
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Mercedes",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+
+        # Create mock driver
+        driver1 = Driver(
+            team=team1,
+            abbreviation="HAM",
+            name="Lewis Hamilton",
+            normalized_name="lewis hamilton"
+        )
+        team1.drivers.append(driver1)
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {}
+        mock_dtm.drivers_by_normalized = {
+            "lewis hamilton": driver1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="lewis hamilton"):
+            # Call with identifier that matches normalized name
+            result = _get_driver_fuzzy("lewis hamilton", mock_session)
+
+            # Verify the correct driver was returned
+            assert result == driver1
+
+    def test_partial_string_match(self):
+        """Test _get_driver_fuzzy when partial string match is found."""
+        # This test targets lines 57, 58, 59, 62, 63, 66, 70, 71, 72
+
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+
+        # Create mock driver
+        driver1 = Driver(
+            team=team1,
+            abbreviation="LEC",
+            name="Charles Leclerc",
+            normalized_name="charles leclerc"
+        )
+        team1.drivers.append(driver1)
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {}
+        mock_dtm.drivers_by_normalized = {
+            "charles leclerc": driver1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="leclerc"):
+            # Call with identifier that is a partial match
+            result = _get_driver_fuzzy("leclerc", mock_session)
+
+            # Verify the correct driver was returned
+            assert result == driver1
+
+    def test_fuzzy_match_exact(self):
+        """Test _get_driver_fuzzy with fuzzy matcher returning exact match."""
+        # This test targets lines 57, 58, 59, 62, 63, 66, 70, 75, 76, 77, 81, 87
+
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Red Bull Racing",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+
+        # Create mock driver
+        driver1 = Driver(
+            team=team1,
+            abbreviation="VER",
+            name="Max Verstappen",
+            normalized_name="max verstappen"
+        )
+        team1.drivers.append(driver1)
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {}
+        mock_dtm.drivers_by_normalized = {
+            "max verstappen": driver1
+        }
+
+        # Mock _get_driver_team_mapping, _normalize_string, and fuzzy_matcher
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="verstapen"), \
+             patch('fastf1.plotting._interface.fuzzy_matcher', return_value=(0, True)):
+            # Call with identifier that requires fuzzy matching
+            result = _get_driver_fuzzy("verstapen", mock_session)
+
+            # Verify the correct driver was returned
+            assert result == driver1
+
+    def test_fuzzy_match_non_exact_with_warning(self):
+        """Test _get_driver_fuzzy with fuzzy matcher returning non-exact match."""
+        # This test targets lines 57, 58, 59, 62, 63, 66, 70, 75, 76, 77, 81, 83, 84, 87
+
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="McLaren",
+            normalized_name="mclaren",
+            short_name="McLaren",
+            colors=TeamColorConstants(official="#ff8700", fastf1="#ff8700")
+        )
+
+        # Create mock driver
+        driver1 = Driver(
+            team=team1,
+            abbreviation="NOR",
+            name="Lando Norris",
+            normalized_name="lando norris"
+        )
+        team1.drivers.append(driver1)
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {}
+        mock_dtm.drivers_by_normalized = {
+            "lando norris": driver1
+        }
+
+        # Mock _get_driver_team_mapping, _normalize_string, and fuzzy_matcher
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="norriss"), \
+             patch('fastf1.plotting._interface.fuzzy_matcher', return_value=(0, False)), \
+             patch('fastf1.plotting._interface._logger') as mock_logger:
+            # Call with identifier that requires fuzzy matching with non-exact result
+            result = _get_driver_fuzzy("norriss", mock_session)
+
+            # Verify the correct driver was returned
+            assert result == driver1
+
+            # Verify warning was logged
+            mock_logger.warning.assert_called_once()
+            assert "Correcting user input 'norriss' to 'lando norris'" in mock_logger.warning.call_args[0][0]
+
+    def test_fuzzy_match_multiple_drivers(self):
+        """Test _get_driver_fuzzy with multiple drivers and fuzzy matching selects second."""
+        # This test targets lines 57, 58, 59, 62, 63, 66, 70, 75, 76, 77, 81, 83, 84, 87
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Alpine",
+            normalized_name="alpine",
+            short_name="Alpine",
+            colors=TeamColorConstants(official="#0090ff", fastf1="#0090ff")
+        )
+
+        team2 = Team(
+            name="Haas F1 Team",
+            normalized_name="haas",
+            short_name="Haas",
+            colors=TeamColorConstants(official="#ff1e00", fastf1="#ff1e00")
+        )
+
+        # Create mock drivers
+        driver1 = Driver(
+            team=team1,
+            abbreviation="OCO",
+            name="Esteban Ocon",
+            normalized_name="esteban ocon"
+        )
+        team1.drivers.append(driver1)
+
+        driver2 = Driver(
+            team=team2,
+            abbreviation="MAG",
+            name="Kevin Magnussen",
+            normalized_name="kevin magnussen"
+        )
+        team2.drivers.append(driver2)
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {}
+        mock_dtm.drivers_by_normalized = {
+            "esteban ocon": driver1,
+            "kevin magnussen": driver2
+        }
+
+        # Mock _get_driver_team_mapping, _normalize_string, and fuzzy_matcher
+        # fuzzy_matcher returns index 1 (second driver) with non-exact match
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="magnusen"), \
+             patch('fastf1.plotting._interface.fuzzy_matcher', return_value=(1, False)), \
+             patch('fastf1.plotting._interface._logger') as mock_logger:
+            # Call with identifier that fuzzy matches to second driver
+            result = _get_driver_fuzzy("magnusen", mock_session)
+
+            # Verify the correct driver was returned (second driver)
+            assert result == driver2
+
+            # Verify warning was logged
+            mock_logger.warning.assert_called_once()
+            assert "Correcting user input 'magnusen' to 'kevin magnussen'" in mock_logger.warning.call_args[0][0]
