@@ -848,6 +848,109 @@ class TestLaps:
         # The lap itself (90s) is less than 96.3s, so it should be included
         assert len(result) == 1
 
+    def test_pick_drivers_single_string_identifier(self):
+        """Test pick_drivers with a single string driver code"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'HAM'],
+            'DriverNumber': ['44', '1', '16', '44'],
+            'LapNumber': [1, 2, 3, 4]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers('HAM')
+
+        assert len(result) == 2
+        assert all(result['Driver'] == 'HAM')
+        assert list(result['LapNumber']) == [1, 4]
+
+    def test_pick_drivers_single_int_identifier(self):
+        """Test pick_drivers with a single integer driver number"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'VER'],
+            'DriverNumber': ['44', '1', '16', '1'],
+            'LapNumber': [1, 2, 3, 4]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers(1)
+
+        assert len(result) == 2
+        assert all(result['DriverNumber'] == '1')
+        assert list(result['LapNumber']) == [2, 4]
+
+    def test_pick_drivers_multiple_identifiers_mixed(self):
+        """Test pick_drivers with list of mixed string codes and integer numbers"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR'],
+            'DriverNumber': ['44', '1', '16', '55', '4'],
+            'LapNumber': [1, 2, 3, 4, 5]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers([44, 'VER', 16])
+
+        assert len(result) == 3
+        assert set(result['Driver']) == {'HAM', 'VER', 'LEC'}
+        assert set(result['LapNumber']) == {1, 2, 3}
+
+    def test_pick_drivers_multiple_string_identifiers(self):
+        """Test pick_drivers with list of string driver codes"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR'],
+            'DriverNumber': ['44', '1', '16', '55', '4'],
+            'LapNumber': [1, 2, 3, 4, 5]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers(['HAM', 'LEC'])
+
+        assert len(result) == 2
+        assert set(result['Driver']) == {'HAM', 'LEC'}
+        assert set(result['LapNumber']) == {1, 3}
+
+    def test_pick_drivers_multiple_int_identifiers(self):
+        """Test pick_drivers with list of integer driver numbers"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR'],
+            'DriverNumber': ['44', '1', '16', '55', '4'],
+            'LapNumber': [1, 2, 3, 4, 5]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers([1, 55])
+
+        assert len(result) == 2
+        assert set(result['Driver']) == {'VER', 'SAI'}
+        assert set(result['LapNumber']) == {2, 4}
+
+    def test_pick_drivers_case_insensitive(self):
+        """Test pick_drivers handles lowercase driver codes correctly"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC'],
+            'DriverNumber': ['44', '1', '16'],
+            'LapNumber': [1, 2, 3]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers('ham')
+
+        assert len(result) == 1
+        assert result.iloc[0]['Driver'] == 'HAM'
+
+    def test_pick_drivers_no_match(self):
+        """Test pick_drivers returns empty Laps when no drivers match"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC'],
+            'DriverNumber': ['44', '1', '16'],
+            'LapNumber': [1, 2, 3]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_drivers('BOT')
+
+        assert len(result) == 0
+        assert isinstance(result, core.Laps)
+
 
 class TestLap:
     """Tests for Lap class"""
