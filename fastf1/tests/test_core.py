@@ -512,6 +512,68 @@ class TestSession:
             # Verify return value
             assert result is mock_circuit_info
 
+    def test_get_driver_by_abbreviation(self):
+        """Test get_driver with valid driver abbreviation"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Create mock results DataFrame
+        results_data = pd.DataFrame({
+            'Abbreviation': ['VER', 'HAM', 'LEC'],
+            'DriverNumber': ['1', '44', '16'],
+            'Position': [1, 2, 3],
+            'TeamName': ['Red Bull Racing', 'Mercedes', 'Ferrari']
+        })
+        session._results = core.SessionResults(results_data)
+
+        # Test getting driver by abbreviation
+        driver = session.get_driver('VER')
+
+        assert driver['Abbreviation'] == 'VER'
+        assert driver['DriverNumber'] == '1'
+        assert driver['Position'] == 1
+
+    def test_get_driver_by_number(self):
+        """Test get_driver with valid driver number"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Create mock results DataFrame
+        results_data = pd.DataFrame({
+            'Abbreviation': ['VER', 'HAM', 'LEC'],
+            'DriverNumber': ['1', '44', '16'],
+            'Position': [1, 2, 3],
+            'TeamName': ['Red Bull Racing', 'Mercedes', 'Ferrari']
+        })
+        session._results = core.SessionResults(results_data)
+
+        # Test getting driver by number
+        driver = session.get_driver('44')
+
+        assert driver['Abbreviation'] == 'HAM'
+        assert driver['DriverNumber'] == '44'
+        assert driver['Position'] == 2
+
+    def test_get_driver_invalid_identifier(self):
+        """Test get_driver with invalid driver identifier"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Create mock results DataFrame
+        results_data = pd.DataFrame({
+            'Abbreviation': ['VER', 'HAM', 'LEC'],
+            'DriverNumber': ['1', '44', '16'],
+            'Position': [1, 2, 3],
+            'TeamName': ['Red Bull Racing', 'Mercedes', 'Ferrari']
+        })
+        session._results = core.SessionResults(results_data)
+
+        # Test with invalid identifier
+        with pytest.raises(ValueError) as excinfo:
+            session.get_driver('INVALID')
+
+        assert "Invalid driver identifier 'INVALID'" in str(excinfo.value)
+
 
 class TestLaps:
     """Tests for Laps class"""
