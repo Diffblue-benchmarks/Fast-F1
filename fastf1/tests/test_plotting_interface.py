@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -734,3 +734,160 @@ class TestGetDriverColorMapping:
             # Call the function with invalid colormap
             with pytest.raises(ValueError, match="Invalid colormap 'invalid'"):
                 get_driver_color_mapping(mock_session, colormap='invalid')
+
+
+class TestGetDriverStyle:
+    """Tests for get_driver_style function."""
+
+    def test_get_driver_style_empty_style_raises_error(self):
+        """Test get_driver_style with empty style raises ValueError."""
+        # This test targets line 659
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team and driver
+        team1 = Team(
+            name="Mercedes",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+        driver1 = Driver(team=team1, abbreviation="HAM", name="Hamilton", normalized_name="hamilton")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1):
+            # Call with empty string
+            with pytest.raises(ValueError, match="The provided style info is empty!"):
+                get_driver_style("HAM", "", mock_session)
+
+            # Call with empty list
+            with pytest.raises(ValueError, match="The provided style info is empty!"):
+                get_driver_style("HAM", [], mock_session)
+
+    def test_get_driver_style_string_style_converted_to_list(self):
+        """Test get_driver_style converts string style to list."""
+        # This test targets line 662
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team and driver
+        team1 = Team(
+            name="Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+        driver1 = Driver(team=team1, abbreviation="LEC", name="Leclerc", normalized_name="leclerc")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver and _get_team_color
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1), \
+             patch('fastf1.plotting._interface._get_team_color', return_value="#dc0000"):
+            # Call with string style
+            result = get_driver_style("LEC", "color", mock_session)
+
+            # Verify the result
+            assert result == {"color": "#dc0000"}
+
+    def test_get_driver_style_unsupported_option_raises_error(self):
+        """Test get_driver_style with unsupported style option raises ValueError."""
+        # This test targets line 678
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team and driver
+        team1 = Team(
+            name="Red Bull",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+        driver1 = Driver(team=team1, abbreviation="VER", name="Verstappen", normalized_name="verstappen")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1):
+            # Call with unsupported style option
+            with pytest.raises(ValueError, match="'invalid_option' is not a supported styling option"):
+                get_driver_style("VER", ["invalid_option"], mock_session)
+
+    def test_get_driver_style_custom_style_not_enough_variants(self):
+        """Test get_driver_style with custom style that has insufficient variants."""
+        # This test targets lines 685-686
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team with two drivers
+        team1 = Team(
+            name="McLaren",
+            normalized_name="mclaren",
+            short_name="McLaren",
+            colors=TeamColorConstants(official="#ff8700", fastf1="#ff8700")
+        )
+        driver1 = Driver(team=team1, abbreviation="NOR", name="Norris", normalized_name="norris")
+        driver2 = Driver(team=team1, abbreviation="PIA", name="Piastri", normalized_name="piastri")
+        team1.drivers = [driver1, driver2]
+
+        # Mock _get_driver to return the second driver (idx=1)
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver2):
+            # Call with only one custom style (but driver idx is 1, needs at least 2)
+            custom_style = [{'color': 'red'}]
+            with pytest.raises(ValueError, match="The provided custom style info does not contain enough variants"):
+                get_driver_style("PIA", custom_style, mock_session)
+
+    def test_get_driver_style_custom_style_invalid_format(self):
+        """Test get_driver_style with custom style that is not a dict."""
+        # This test targets line 691
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team and driver
+        team1 = Team(
+            name="Alpine",
+            normalized_name="alpine",
+            short_name="Alpine",
+            colors=TeamColorConstants(official="#0090ff", fastf1="#0090ff")
+        )
+        driver1 = Driver(team=team1, abbreviation="ALO", name="Alonso", normalized_name="alonso")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1):
+            # Call with custom style that is not a dict (use a list with non-string element)
+            # The first element must NOT be a string to enter the else block
+            custom_style = [123]  # integer instead of dict
+            with pytest.raises(ValueError, match="The provided style info has an invalid format!"):
+                get_driver_style("ALO", custom_style, mock_session)
+
+    def test_get_driver_style_custom_style_with_auto_color(self):
+        """Test get_driver_style with custom style and 'auto' color replacement."""
+        # This test targets line 685 and validates the custom style path
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team and driver
+        team1 = Team(
+            name="Haas",
+            normalized_name="haas",
+            short_name="Haas",
+            colors=TeamColorConstants(official="#ff1e00", fastf1="#ff1e00")
+        )
+        driver1 = Driver(team=team1, abbreviation="MAG", name="Magnussen", normalized_name="magnussen")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver and _replace_magic_auto
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1), \
+             patch('fastf1.plotting._interface._replace_magic_auto', return_value={'color': '#ff1e00', 'linestyle': 'solid'}):
+            # Call with valid custom style
+            custom_style = [{'color': 'auto', 'linestyle': 'solid'}]
+            result = get_driver_style("MAG", custom_style, mock_session)
+
+            # Verify the result
+            assert result == {'color': '#ff1e00', 'linestyle': 'solid'}
