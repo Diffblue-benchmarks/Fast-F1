@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -583,3 +583,154 @@ class TestListTeamNames:
             assert "Mercedes" in result
             assert "Ferrari" in result
             assert "Red Bull" in result
+
+
+class TestGetDriverColorMapping:
+    """Tests for get_driver_color_mapping function."""
+
+    def test_get_driver_color_mapping_default(self):
+        """Test get_driver_color_mapping with default colormap."""
+        # This test targets lines 753, 755-756, 758-761, 771
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Mercedes",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00ffcc")
+        )
+        team2 = Team(
+            name="Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#ff0000")
+        )
+
+        # Create mock drivers
+        driver1 = Driver(team=team1, abbreviation="HAM", name="Hamilton", normalized_name="hamilton")
+        driver2 = Driver(team=team2, abbreviation="LEC", name="Leclerc", normalized_name="leclerc")
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {
+            "HAM": driver1,
+            "LEC": driver2
+        }
+
+        # Mock _get_driver_team_mapping
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm):
+            # Call the function with default colormap
+            result = get_driver_color_mapping(mock_session)
+
+            # Verify the result uses fastf1 colors (since default is 'fastf1')
+            assert len(result) == 2
+            assert result["HAM"] == "#00ffcc"
+            assert result["LEC"] == "#ff0000"
+
+    def test_get_driver_color_mapping_fastf1(self):
+        """Test get_driver_color_mapping with fastf1 colormap explicitly."""
+        # This test targets lines 753, 758-761, 771
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Red Bull",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#1e41ff")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="VER", name="Verstappen", normalized_name="verstappen")
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {
+            "VER": driver1
+        }
+
+        # Mock _get_driver_team_mapping
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm):
+            # Call the function with fastf1 colormap
+            result = get_driver_color_mapping(mock_session, colormap='fastf1')
+
+            # Verify the result uses fastf1 colors
+            assert len(result) == 1
+            assert result["VER"] == "#1e41ff"
+
+    def test_get_driver_color_mapping_official(self):
+        """Test get_driver_color_mapping with official colormap."""
+        # This test targets lines 753, 763-766, 771
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="McLaren",
+            normalized_name="mclaren",
+            short_name="McLaren",
+            colors=TeamColorConstants(official="#ff8700", fastf1="#ff9900")
+        )
+        team2 = Team(
+            name="Alpine",
+            normalized_name="alpine",
+            short_name="Alpine",
+            colors=TeamColorConstants(official="#0090ff", fastf1="#00aaff")
+        )
+
+        # Create mock drivers
+        driver1 = Driver(team=team1, abbreviation="NOR", name="Norris", normalized_name="norris")
+        driver2 = Driver(team=team2, abbreviation="ALO", name="Alonso", normalized_name="alonso")
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {
+            "NOR": driver1,
+            "ALO": driver2
+        }
+
+        # Mock _get_driver_team_mapping
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm):
+            # Call the function with official colormap
+            result = get_driver_color_mapping(mock_session, colormap='official')
+
+            # Verify the result uses official colors
+            assert len(result) == 2
+            assert result["NOR"] == "#ff8700"
+            assert result["ALO"] == "#0090ff"
+
+    def test_get_driver_color_mapping_invalid_colormap(self):
+        """Test get_driver_color_mapping with invalid colormap raises ValueError."""
+        # This test targets lines 753, 769
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Haas",
+            normalized_name="haas",
+            short_name="Haas",
+            colors=TeamColorConstants(official="#ff1e00", fastf1="#ff3333")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="MAG", name="Magnussen", normalized_name="magnussen")
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {
+            "MAG": driver1
+        }
+
+        # Mock _get_driver_team_mapping
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm):
+            # Call the function with invalid colormap
+            with pytest.raises(ValueError, match="Invalid colormap 'invalid'"):
+                get_driver_color_mapping(mock_session, colormap='invalid')
