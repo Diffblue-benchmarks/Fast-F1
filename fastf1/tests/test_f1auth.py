@@ -192,3 +192,45 @@ def test_print_auth_status_without_exp_field(reset_subscription_token):
             assert "Token Status: Expires None (UTC)" in call_args
             assert "Subscription Status: active" in call_args
             assert "Subscribed Product: F1TV Premium" in call_args
+
+
+def test_clear_auth_token_clears_global_and_deletes_file(reset_subscription_token):
+    """Test clear_auth_token clears the global token and deletes the auth file."""
+    import fastf1.internals.f1auth as f1auth
+
+    # Set a token to ensure it gets cleared
+    test_token = "token_to_clear"
+    f1auth._subscription_token = test_token
+
+    # Create a mock for AUTH_DATA_FILE with unlink method
+    mock_auth_file = MagicMock()
+    with patch.object(f1auth, 'AUTH_DATA_FILE', mock_auth_file):
+        f1auth.clear_auth_token()
+
+        # Verify the global token was cleared
+        assert f1auth._subscription_token is None
+
+        # Verify unlink was called to delete the file
+        mock_auth_file.unlink.assert_called_once()
+
+
+def test_clear_auth_token_handles_file_not_found(reset_subscription_token):
+    """Test clear_auth_token handles FileNotFoundError when file doesn't exist."""
+    import fastf1.internals.f1auth as f1auth
+
+    # Set a token to ensure it gets cleared
+    test_token = "token_to_clear"
+    f1auth._subscription_token = test_token
+
+    # Create a mock that raises FileNotFoundError when unlink is called
+    mock_auth_file = MagicMock()
+    mock_auth_file.unlink.side_effect = FileNotFoundError
+
+    with patch.object(f1auth, 'AUTH_DATA_FILE', mock_auth_file):
+        f1auth.clear_auth_token()
+
+        # Verify the global token was still cleared
+        assert f1auth._subscription_token is None
+
+        # Verify unlink was attempted
+        mock_auth_file.unlink.assert_called_once()
