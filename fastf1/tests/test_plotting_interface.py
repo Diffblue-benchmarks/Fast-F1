@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name, _get_team_exact
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name, _get_team_exact, _get_team_fuzzy
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -1128,3 +1128,264 @@ class TestGetTeamExact:
             # Call with an identifier that doesn't match anything
             with pytest.raises(KeyError, match="No team found for 'nonexistent team' \\(exact match only\\)"):
                 _get_team_exact("nonexistent team", mock_session)
+
+
+class TestGetTeamFuzzy:
+    """Tests for _get_team_fuzzy function."""
+
+    def test_get_team_fuzzy_with_common_words_removed(self):
+        """Test _get_team_fuzzy removes common words and finds exact match."""
+        # This test targets lines 114, 115, 117, 118, 121, 122, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Red Bull Racing",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "red bull": team1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="red bull racing"):
+            # Call with identifier containing common words that should be removed
+            result = _get_team_fuzzy("Red Bull Racing F1 Team", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+    def test_get_team_fuzzy_exact_normalized_match(self):
+        """Test _get_team_fuzzy with exact normalized team name match."""
+        # This test targets lines 114, 115, 117, 118, 121, 122, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Mercedes",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "mercedes": team1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="mercedes"):
+            # Call with exact normalized match
+            result = _get_team_fuzzy("mercedes", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+    def test_get_team_fuzzy_full_name_match(self):
+        """Test _get_team_fuzzy matches full team name."""
+        # This test targets lines 114, 115, 117, 118, 126, 127, 132, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Scuderia Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "ferrari": team1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="scuderia ferrari"):
+            # Call with identifier matching full team name
+            result = _get_team_fuzzy("Scuderia Ferrari", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+    def test_get_team_fuzzy_short_name_match(self):
+        """Test _get_team_fuzzy matches team short name."""
+        # This test targets lines 114, 115, 117, 118, 126, 127, 132, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Aston Martin Aramco Cognizant F1 Team",
+            normalized_name="aston martin",
+            short_name="Aston Martin",
+            colors=TeamColorConstants(official="#006f62", fastf1="#00665e")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "aston martin": team1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="aston martin"):
+            # Call with identifier matching short name
+            result = _get_team_fuzzy("Aston Martin", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+    def test_get_team_fuzzy_partial_normalized_match(self):
+        """Test _get_team_fuzzy with partial string match in normalized name."""
+        # This test targets lines 114, 115, 117, 118, 126, 127, 132, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="McLaren Formula 1 Team",
+            normalized_name="mclaren",
+            short_name="McLaren",
+            colors=TeamColorConstants(official="#ff8700", fastf1="#ff8700")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "mclaren": team1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="mcl"):
+            # Call with partial identifier
+            result = _get_team_fuzzy("mcl", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+    def test_get_team_fuzzy_with_fuzzy_matching_exact(self):
+        """Test _get_team_fuzzy with fuzzy matching that returns exact match."""
+        # This test targets lines 114, 115, 117, 118, 135, 136, 137, 141, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Alpine F1 Team",
+            normalized_name="alpine",
+            short_name="Alpine",
+            colors=TeamColorConstants(official="#0090ff", fastf1="#0090ff")
+        )
+        team2 = Team(
+            name="Haas F1 Team",
+            normalized_name="haas",
+            short_name="Haas",
+            colors=TeamColorConstants(official="#ffffff", fastf1="#ffffff")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "alpine": team1,
+            "haas": team2
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="alpn"), \
+             patch('fastf1.internals.fuzzy.fuzzy_matcher', return_value=(0, True)):
+            # Call with identifier requiring fuzzy match
+            result = _get_team_fuzzy("alpn", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+    def test_get_team_fuzzy_with_fuzzy_matching_not_exact(self):
+        """Test _get_team_fuzzy with fuzzy matching that is not exact and logs warning."""
+        # This test targets lines 114, 115, 117, 118, 135, 136, 137, 141, 143, 144, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Williams Racing",
+            normalized_name="williams",
+            short_name="Williams",
+            colors=TeamColorConstants(official="#005aff", fastf1="#005aff")
+        )
+        team2 = Team(
+            name="Alfa Romeo Racing",
+            normalized_name="alfa romeo",
+            short_name="Alfa Romeo",
+            colors=TeamColorConstants(official="#900000", fastf1="#900000")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "williams": team1,
+            "alfa romeo": team2
+        }
+
+        # Mock _get_driver_team_mapping, _normalize_string, and fuzzy_matcher
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="wiliams"), \
+             patch('fastf1.internals.fuzzy.fuzzy_matcher', return_value=(0, False)), \
+             patch('fastf1.plotting._interface._logger') as mock_logger:
+            # Call with identifier requiring fuzzy match (misspelled)
+            result = _get_team_fuzzy("wiliams", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
+
+            # Verify warning was logged
+            mock_logger.warning.assert_called_once()
+            args = mock_logger.warning.call_args[0]
+            assert "Correcting user input" in args[0]
+            assert "wiliams" in args[0]
+            assert "williams" in args[0]
+
+    def test_get_team_fuzzy_removes_all_common_words(self):
+        """Test _get_team_fuzzy removes all common words (racing, team, f1, scuderia)."""
+        # This test targets lines 114, 115, 117, 118, 121, 122, 147
+
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="AlphaTauri",
+            normalized_name="alphatauri",
+            short_name="AlphaTauri",
+            colors=TeamColorConstants(official="#2b4562", fastf1="#2b4562")
+        )
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "alphatauri": team1
+        }
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        # The identifier will have all common words which should be stripped
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', return_value="scuderia alphatauri racing team f1"):
+            # Call with identifier containing all common words
+            result = _get_team_fuzzy("Scuderia AlphaTauri Racing Team F1", mock_session)
+
+            # Verify the correct team was returned
+            assert result == team1
