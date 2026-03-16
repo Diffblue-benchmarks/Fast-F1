@@ -690,3 +690,359 @@ def test_get_schedule_from_ergast_multiple_races():
         assert result.iloc[1]['RoundNumber'] == 2
         assert result.iloc[0]['EventName'] == 'First Grand Prix'
         assert result.iloc[1]['EventName'] == 'Second Grand Prix'
+
+
+# Tests for _get_schedule_from_f1_timing
+def test_get_schedule_from_f1_timing_conventional_2020():
+    """Test _get_schedule_from_f1_timing with conventional format for year <= 2020."""
+    mock_response = [{
+        'Country': {'Name': 'Bahrain'},
+        'Location': 'Sakhir',
+        'Name': 'Bahrain Grand Prix',
+        'OfficialName': 'Formula 1 Gulf Air Bahrain Grand Prix 2020',
+        'Number': 1,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2020-03-27T11:30:00', 'GmtOffset': '03:00:00'},
+            {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2020-03-27T15:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2020-03-28T12:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2020-03-28T15:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2020-03-29T15:10:00', 'GmtOffset': '03:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2020)
+
+        assert isinstance(result, EventSchedule)
+        assert result.year == 2020
+        assert len(result) == 1
+        assert result.iloc[0]['Country'] == 'Bahrain'
+        assert result.iloc[0]['Location'] == 'Sakhir'
+        assert result.iloc[0]['EventName'] == 'Bahrain Grand Prix'
+        assert result.iloc[0]['OfficialEventName'] == 'Formula 1 Gulf Air Bahrain Grand Prix 2020'
+        assert result.iloc[0]['EventFormat'] == 'conventional'
+        assert result.iloc[0]['RoundNumber'] == 1
+        assert result.iloc[0]['F1ApiSupport'] == True
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Practice 2'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+        assert result.iloc[0]['Session4'] == 'Qualifying'
+        assert result.iloc[0]['Session5'] == 'Race'
+
+
+def test_get_schedule_from_f1_timing_testing_event():
+    """Test _get_schedule_from_f1_timing with testing event."""
+    mock_response = [{
+        'Country': {'Name': 'Spain'},
+        'Location': 'Barcelona',
+        'Name': 'Pre-Season Test',
+        'OfficialName': 'Formula 1 Pre-Season Testing',
+        'Number': 0,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-02-23T09:00:00', 'GmtOffset': '01:00:00'},
+            {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2023-02-23T13:00:00', 'GmtOffset': '01:00:00'},
+            {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2023-02-24T09:00:00', 'GmtOffset': '01:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventName'] == 'Pre-Season Test'
+        assert result.iloc[0]['EventFormat'] == 'testing'
+        assert result.iloc[0]['RoundNumber'] == 0
+
+
+def test_get_schedule_from_f1_timing_sprint_2021():
+    """Test _get_schedule_from_f1_timing with 2021 sprint format."""
+    mock_response = [{
+        'Country': {'Name': 'UK'},
+        'Location': 'Silverstone',
+        'Name': 'British Grand Prix',
+        'OfficialName': 'Formula 1 Pirelli British Grand Prix 2021',
+        'Number': 10,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2021-07-16T14:30:00', 'GmtOffset': '01:00:00'},
+            {'Key': 2, 'Name': 'Qualifying', 'StartDate': '2021-07-16T18:00:00', 'GmtOffset': '01:00:00'},
+            {'Key': 3, 'Name': 'Practice 2', 'StartDate': '2021-07-17T12:00:00', 'GmtOffset': '01:00:00'},
+            {'Key': 4, 'Name': 'Sprint Qualifying', 'StartDate': '2021-07-17T16:30:00', 'GmtOffset': '01:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2021-07-18T15:00:00', 'GmtOffset': '01:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2021)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint'
+        assert result.iloc[0]['Session4'] == 'Sprint'  # Should be renamed from 'Sprint Qualifying'
+        assert result.iloc[0]['RoundNumber'] == 10
+
+
+def test_get_schedule_from_f1_timing_sprint_2022():
+    """Test _get_schedule_from_f1_timing with 2022 sprint format."""
+    mock_response = [{
+        'Country': {'Name': 'Austria'},
+        'Location': 'Spielberg',
+        'Name': 'Austrian Grand Prix',
+        'OfficialName': 'Formula 1 Rolex Großer Preis von Österreich 2022',
+        'Number': 11,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2022-07-08T13:30:00', 'GmtOffset': '02:00:00'},
+            {'Key': 2, 'Name': 'Qualifying', 'StartDate': '2022-07-08T17:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 3, 'Name': 'Practice 2', 'StartDate': '2022-07-09T12:30:00', 'GmtOffset': '02:00:00'},
+            {'Key': 4, 'Name': 'Sprint', 'StartDate': '2022-07-09T16:30:00', 'GmtOffset': '02:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2022-07-10T15:00:00', 'GmtOffset': '02:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2022)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint'
+        assert result.iloc[0]['Session4'] == 'Sprint'
+        assert result.iloc[0]['RoundNumber'] == 11
+
+
+def test_get_schedule_from_f1_timing_conventional_2022():
+    """Test _get_schedule_from_f1_timing with conventional format in 2022."""
+    mock_response = [{
+        'Country': {'Name': 'Monaco'},
+        'Location': 'Monaco',
+        'Name': 'Monaco Grand Prix',
+        'OfficialName': 'Formula 1 Grand Prix de Monaco 2022',
+        'Number': 7,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2022-05-27T14:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2022-05-27T17:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2022-05-28T13:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2022-05-28T16:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2022-05-29T15:00:00', 'GmtOffset': '02:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2022)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'conventional'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+        assert result.iloc[0]['Session4'] == 'Qualifying'
+
+
+def test_get_schedule_from_f1_timing_sprint_shootout_2023():
+    """Test _get_schedule_from_f1_timing with 2023 sprint shootout format."""
+    mock_response = [{
+        'Country': {'Name': 'Azerbaijan'},
+        'Location': 'Baku',
+        'Name': 'Azerbaijan Grand Prix',
+        'OfficialName': 'Formula 1 Azerbaijan Grand Prix 2023',
+        'Number': 4,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-04-28T13:30:00', 'GmtOffset': '04:00:00'},
+            {'Key': 2, 'Name': 'Qualifying', 'StartDate': '2023-04-28T17:00:00', 'GmtOffset': '04:00:00'},
+            {'Key': 3, 'Name': 'Sprint Shootout', 'StartDate': '2023-04-29T12:30:00', 'GmtOffset': '04:00:00'},
+            {'Key': 4, 'Name': 'Sprint', 'StartDate': '2023-04-29T16:30:00', 'GmtOffset': '04:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2023-04-30T13:00:00', 'GmtOffset': '04:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint_shootout'
+        assert result.iloc[0]['Session3'] == 'Sprint Shootout'
+        assert result.iloc[0]['RoundNumber'] == 4
+
+
+def test_get_schedule_from_f1_timing_conventional_2023():
+    """Test _get_schedule_from_f1_timing with conventional format in 2023."""
+    mock_response = [{
+        'Country': {'Name': 'Italy'},
+        'Location': 'Monza',
+        'Name': 'Italian Grand Prix',
+        'OfficialName': 'Formula 1 Pirelli Gran Premio d\'Italia 2023',
+        'Number': 16,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-09-01T13:30:00', 'GmtOffset': '02:00:00'},
+            {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2023-09-01T17:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2023-09-02T12:30:00', 'GmtOffset': '02:00:00'},
+            {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2023-09-02T16:00:00', 'GmtOffset': '02:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2023-09-03T15:00:00', 'GmtOffset': '02:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'conventional'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+
+
+def test_get_schedule_from_f1_timing_sprint_qualifying_2024():
+    """Test _get_schedule_from_f1_timing with 2024+ sprint qualifying format."""
+    mock_response = [{
+        'Country': {'Name': 'USA'},
+        'Location': 'Miami',
+        'Name': 'Miami Grand Prix',
+        'OfficialName': 'Formula 1 Crypto.com Miami Grand Prix 2024',
+        'Number': 6,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2024-05-03T20:30:00', 'GmtOffset': '-04:00:00'},
+            {'Key': 2, 'Name': 'Sprint Qualifying', 'StartDate': '2024-05-04T18:30:00', 'GmtOffset': '-04:00:00'},
+            {'Key': 3, 'Name': 'Sprint', 'StartDate': '2024-05-04T22:00:00', 'GmtOffset': '-04:00:00'},
+            {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2024-05-05T18:00:00', 'GmtOffset': '-04:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2024-05-05T21:30:00', 'GmtOffset': '-04:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2024)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint_qualifying'
+        assert result.iloc[0]['Session2'] == 'Sprint Qualifying'
+        assert result.iloc[0]['RoundNumber'] == 6
+
+
+def test_get_schedule_from_f1_timing_conventional_2024():
+    """Test _get_schedule_from_f1_timing with conventional format in 2024+."""
+    mock_response = [{
+        'Country': {'Name': 'Japan'},
+        'Location': 'Suzuka',
+        'Name': 'Japanese Grand Prix',
+        'OfficialName': 'Formula 1 Rolex Japanese Grand Prix 2024',
+        'Number': 5,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2024-04-05T11:30:00', 'GmtOffset': '09:00:00'},
+            {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2024-04-05T15:00:00', 'GmtOffset': '09:00:00'},
+            {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2024-04-06T11:30:00', 'GmtOffset': '09:00:00'},
+            {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2024-04-06T15:00:00', 'GmtOffset': '09:00:00'},
+            {'Key': 5, 'Name': 'Race', 'StartDate': '2024-04-07T14:00:00', 'GmtOffset': '09:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2024)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'conventional'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+        assert result.iloc[0]['Session4'] == 'Qualifying'
+
+
+def test_get_schedule_from_f1_timing_fewer_sessions():
+    """Test _get_schedule_from_f1_timing with fewer than 5 sessions (IndexError handling)."""
+    mock_response = [{
+        'Country': {'Name': 'Spain'},
+        'Location': 'Barcelona',
+        'Name': 'Testing Session',
+        'OfficialName': 'Pre-Season Testing',
+        'Number': 0,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-02-23T09:00:00', 'GmtOffset': '01:00:00'},
+            {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2023-02-23T13:00:00', 'GmtOffset': '01:00:00'},
+            {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2023-02-24T09:00:00', 'GmtOffset': '01:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Practice 2'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+        # Missing sessions may be None or empty string depending on EventSchedule implementation
+        assert result.iloc[0]['Session4'] in (None, '')
+        assert result.iloc[0]['Session5'] in (None, '')
+        assert pd.isna(result.iloc[0]['Session4DateUtc'])
+        assert pd.isna(result.iloc[0]['Session5DateUtc'])
+
+
+def test_get_schedule_from_f1_timing_invalid_sessions_filtered():
+    """Test _get_schedule_from_f1_timing filters out invalid sessions (Key=-1 or no Name)."""
+    mock_response = [{
+        'Country': {'Name': 'Bahrain'},
+        'Location': 'Sakhir',
+        'Name': 'Bahrain Grand Prix',
+        'OfficialName': 'Formula 1 Gulf Air Bahrain Grand Prix 2023',
+        'Number': 1,
+        'Sessions': [
+            {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-03-03T11:30:00', 'GmtOffset': '03:00:00'},
+            {'Key': -1, 'Name': 'Invalid Session', 'StartDate': '2023-03-03T13:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 2, 'Name': '', 'StartDate': '2023-03-03T15:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 3, 'Name': 'Practice 2', 'StartDate': '2023-03-03T17:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 4, 'Name': 'Practice 3', 'StartDate': '2023-03-04T12:30:00', 'GmtOffset': '03:00:00'},
+            {'Key': 5, 'Name': 'Qualifying', 'StartDate': '2023-03-04T16:00:00', 'GmtOffset': '03:00:00'},
+            {'Key': 6, 'Name': 'Race', 'StartDate': '2023-03-05T15:00:00', 'GmtOffset': '03:00:00'}
+        ]
+    }]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Practice 2'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+        assert result.iloc[0]['Session4'] == 'Qualifying'
+        assert result.iloc[0]['Session5'] == 'Race'
+
+
+def test_get_schedule_from_f1_timing_multiple_events():
+    """Test _get_schedule_from_f1_timing with multiple events."""
+    mock_response = [
+        {
+            'Country': {'Name': 'Bahrain'},
+            'Location': 'Sakhir',
+            'Name': 'Bahrain Grand Prix',
+            'OfficialName': 'Formula 1 Gulf Air Bahrain Grand Prix 2023',
+            'Number': 1,
+            'Sessions': [
+                {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-03-03T11:30:00', 'GmtOffset': '03:00:00'},
+                {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2023-03-03T15:00:00', 'GmtOffset': '03:00:00'},
+                {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2023-03-04T12:30:00', 'GmtOffset': '03:00:00'},
+                {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2023-03-04T16:00:00', 'GmtOffset': '03:00:00'},
+                {'Key': 5, 'Name': 'Race', 'StartDate': '2023-03-05T15:00:00', 'GmtOffset': '03:00:00'}
+            ]
+        },
+        {
+            'Country': {'Name': 'Saudi Arabia'},
+            'Location': 'Jeddah',
+            'Name': 'Saudi Arabian Grand Prix',
+            'OfficialName': 'Formula 1 STC Saudi Arabian Grand Prix 2023',
+            'Number': 2,
+            'Sessions': [
+                {'Key': 1, 'Name': 'Practice 1', 'StartDate': '2023-03-17T14:30:00', 'GmtOffset': '03:00:00'},
+                {'Key': 2, 'Name': 'Practice 2', 'StartDate': '2023-03-17T18:00:00', 'GmtOffset': '03:00:00'},
+                {'Key': 3, 'Name': 'Practice 3', 'StartDate': '2023-03-18T14:30:00', 'GmtOffset': '03:00:00'},
+                {'Key': 4, 'Name': 'Qualifying', 'StartDate': '2023-03-18T18:00:00', 'GmtOffset': '03:00:00'},
+                {'Key': 5, 'Name': 'Race', 'StartDate': '2023-03-19T18:00:00', 'GmtOffset': '03:00:00'}
+            ]
+        }
+    ]
+
+    with patch('fastf1._api.season_schedule', return_value=mock_response):
+        result = events._get_schedule_from_f1_timing(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 2
+        assert result.iloc[0]['Country'] == 'Bahrain'
+        assert result.iloc[1]['Country'] == 'Saudi Arabia'
+        assert result.iloc[0]['RoundNumber'] == 1
+        assert result.iloc[1]['RoundNumber'] == 2
