@@ -414,3 +414,126 @@ def test_get_auth_token_auth_server_fails_after_invalid_token(reset_subscription
 
                 # Verify result is None
                 assert result is None
+
+
+def test_verify_jwt_with_valid_token():
+    """Test _verify_jwt successfully decodes a valid JWT token."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_token = "valid.jwt.token"
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "test_kid_123"
+    test_jwk = {
+        'kid': test_kid,
+        'kty': 'RSA',
+        'n': 'test_n_value',
+        'e': 'AQAB'
+    }
+    expected_payload = {
+        'sub': 'user123',
+        'exp': 1234567890,
+        'SubscriptionStatus': 'active'
+    }
+
+    # Mock the JWT library functions
+    with patch("jwt.get_unverified_header", return_value={'kid': test_kid}):
+        with patch("fastf1.internals.f1auth._get_jwk_from_jwks_uri", return_value=test_jwk):
+            with patch("jwt.algorithms.RSAAlgorithm.from_jwk") as mock_from_jwk:
+                mock_public_key = MagicMock()
+                mock_from_jwk.return_value = mock_public_key
+
+                with patch("jwt.decode", return_value=expected_payload):
+                    result = f1auth._verify_jwt(test_token, test_jwks_uri)
+
+                    # Verify the result matches expected payload
+                    assert result == expected_payload
+
+
+def test_verify_jwt_with_custom_options():
+    """Test _verify_jwt with custom audience, issuer, and options."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_token = "custom.jwt.token"
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "custom_kid"
+    test_jwk = {'kid': test_kid, 'kty': 'RSA'}
+    test_audience = "https://api.formula1.com"
+    test_issuer = "https://formula1.com"
+    test_options = {'verify_signature': False}
+    expected_payload = {'aud': test_audience, 'iss': test_issuer}
+
+    with patch("jwt.get_unverified_header", return_value={'kid': test_kid}):
+        with patch("fastf1.internals.f1auth._get_jwk_from_jwks_uri", return_value=test_jwk):
+            with patch("jwt.algorithms.RSAAlgorithm.from_jwk"):
+                with patch("jwt.decode", return_value=expected_payload) as mock_decode:
+                    result = f1auth._verify_jwt(
+                        test_token,
+                        test_jwks_uri,
+                        audience=test_audience,
+                        issuer=test_issuer,
+                        verify=False,
+                        options=test_options
+                    )
+
+                    # Verify jwt.decode was called with correct parameters
+                    mock_decode.assert_called_once()
+                    call_kwargs = mock_decode.call_args.kwargs
+                    assert call_kwargs['audience'] == test_audience
+                    assert call_kwargs['issuer'] == test_issuer
+                    assert call_kwargs['verify'] == False
+                    assert call_kwargs['options'] == test_options
+                    assert result == expected_payload
+
+
+def test_verify_jwt_extracts_kid_from_header():
+    """Test _verify_jwt correctly extracts kid from JWT header."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_token = "token.with.kid"
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "extracted_kid_456"
+    test_jwk = {'kid': test_kid}
+    expected_payload = {'data': 'test'}
+
+    with patch("jwt.get_unverified_header", return_value={'kid': test_kid}) as mock_get_header:
+        with patch("fastf1.internals.f1auth._get_jwk_from_jwks_uri", return_value=test_jwk) as mock_get_jwk:
+            with patch("jwt.algorithms.RSAAlgorithm.from_jwk"):
+                with patch("jwt.decode", return_value=expected_payload):
+                    f1auth._verify_jwt(test_token, test_jwks_uri)
+
+                    # Verify get_unverified_header was called with the token
+                    mock_get_header.assert_called_once_with(test_token)
+
+                    # Verify _get_jwk_from_jwks_uri was called with correct kid
+                    mock_get_jwk.assert_called_once_with(test_jwks_uri, test_kid)
+
+
+def test_verify_jwt_converts_jwk_to_public_key():
+    """Test _verify_jwt converts JWK to RSA public key."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_token = "token.for.conversion"
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_jwk = {
+        'kid': 'conversion_kid',
+        'kty': 'RSA',
+        'n': 'modulus_value',
+        'e': 'exponent_value'
+    }
+    expected_payload = {'converted': True}
+
+    with patch("jwt.get_unverified_header", return_value={'kid': 'conversion_kid'}):
+        with patch("fastf1.internals.f1auth._get_jwk_from_jwks_uri", return_value=test_jwk):
+            with patch("jwt.algorithms.RSAAlgorithm.from_jwk") as mock_from_jwk:
+                mock_public_key = MagicMock()
+                mock_from_jwk.return_value = mock_public_key
+
+                with patch("jwt.decode", return_value=expected_payload) as mock_decode:
+                    result = f1auth._verify_jwt(test_token, test_jwks_uri)
+
+                    # Verify RSAAlgorithm.from_jwk was called with the JWK
+                    mock_from_jwk.assert_called_once_with(test_jwk)
+
+                    # Verify jwt.decode was called with the public key
+                    assert mock_decode.call_args.kwargs['key'] == mock_public_key
+                    assert result == expected_payload
