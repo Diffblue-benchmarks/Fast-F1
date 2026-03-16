@@ -1213,6 +1213,63 @@ class TestSession:
         assert any("Session results contain duplicate entries for driver(s)" in record.message
                    for record in caplog.records)
 
+    def test_init_with_get_session_date_value_error(self):
+        """Test Session.__init__ when get_session_date raises ValueError for utc=False"""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        mock_event = Mock()
+        mock_event.year = 2023
+        mock_event.RoundNumber = 5
+        mock_event.EventName = 'Monaco Grand Prix'
+        mock_event.__getitem__ = Mock(side_effect=lambda key: {
+            'EventName': 'Monaco Grand Prix',
+            'EventDate': pd.Timestamp(datetime(2023, 5, 20))
+        }[key])
+
+        # First call (utc=True) succeeds, second call (utc=False) raises ValueError
+        utc_date = pd.Timestamp(datetime(2023, 5, 20, 12, 0, 0))
+        mock_event.get_session_date = Mock(side_effect=[utc_date, ValueError("No local time available")])
+
+        with patch('fastf1.core.api.make_path') as mock_make_path:
+            mock_make_path.return_value = '/api/path'
+            session = core.Session(event=mock_event, session_name='Race')
+
+        # Verify that the session was created successfully
+        assert session.event == mock_event
+        assert session.name == 'Race'
+        assert session.date == utc_date
+        # Verify get_session_date was called twice (once with utc=True, once with utc=False)
+        assert mock_event.get_session_date.call_count == 2
+        # Verify that api.make_path was called with UTC date as fallback
+        mock_make_path.assert_called_once()
+        call_args = mock_make_path.call_args[0]
+        # The last argument should be the formatted UTC date
+        assert call_args[3] == utc_date.strftime('%Y-%m-%d')
+
+    def test_init_session_types_year_2024_and_later(self):
+        """Test Session.__init__ sets correct session types for year >= 2024"""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        mock_event = Mock()
+        mock_event.year = 2024
+        mock_event.RoundNumber = 1
+        mock_event.EventName = 'Bahrain Grand Prix'
+        mock_event.__getitem__ = Mock(side_effect=lambda key: {
+            'EventName': 'Bahrain Grand Prix',
+            'EventDate': pd.Timestamp(datetime(2024, 3, 2))
+        }[key])
+        mock_event.get_session_date = Mock(return_value=pd.Timestamp(datetime(2024, 3, 2)))
+
+        with patch('fastf1.core.api.make_path') as mock_make_path:
+            mock_make_path.return_value = '/api/path'
+            session = core.Session(event=mock_event, session_name='Race')
+
+        # Verify session types for 2024 and later
+        assert session._RACE_LIKE_SESSIONS == ('Race', 'Sprint')
+        assert session._QUALI_LIKE_SESSIONS == ('Qualifying', 'Sprint Qualifying')
+
 
 class TestLaps:
     """Tests for Laps class"""
