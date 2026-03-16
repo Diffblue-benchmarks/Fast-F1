@@ -266,6 +266,83 @@ class TestTelemetry:
         assert result is telemetry
         assert result['RelativeDistance'].iloc[-1] == 0.6
 
+    def test_resample_channels_both_params_raises_error(self):
+        """Test resample_channels raises ValueError when both rule and new_date_ref are specified"""
+        data = pd.DataFrame({
+            'Date': pd.date_range('2023-01-01 10:00:00', periods=5, freq='1s'),
+            'SessionTime': pd.to_timedelta([0, 1, 2, 3, 4], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0, 140.0]
+        })
+        telemetry = core.Telemetry(data)
+
+        new_date_ref = pd.Series(pd.date_range('2023-01-01 10:00:00', periods=3, freq='2s'))
+
+        with pytest.raises(ValueError) as excinfo:
+            telemetry.resample_channels(rule='1s', new_date_ref=new_date_ref)
+        assert "only specify one" in str(excinfo.value).lower()
+
+    def test_resample_channels_no_params_raises_error(self):
+        """Test resample_channels raises ValueError when neither rule nor new_date_ref is specified"""
+        data = pd.DataFrame({
+            'Date': pd.date_range('2023-01-01 10:00:00', periods=5, freq='1s'),
+            'SessionTime': pd.to_timedelta([0, 1, 2, 3, 4], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0, 140.0]
+        })
+        telemetry = core.Telemetry(data)
+
+        with pytest.raises(ValueError) as excinfo:
+            telemetry.resample_channels()
+        assert "need to specify either" in str(excinfo.value).lower()
+
+    def test_resample_channels_with_rule(self):
+        """Test resample_channels with rule parameter for downsampling"""
+        mock_session = Mock()
+        mock_session.t0_date = pd.Timestamp('2023-01-01 10:00:00')
+
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta(range(0, 1000, 100), unit='ms'),
+            'Date': pd.date_range('2023-01-01 10:00:00', periods=10, freq='100ms'),
+            'SessionTime': pd.to_timedelta(range(0, 1000, 100), unit='ms'),
+            'Speed': [100.0 + i * 10 for i in range(10)],
+            'RPM': [8000 + i * 100 for i in range(10)]
+        })
+        telemetry = core.Telemetry(data, session=mock_session)
+
+        result = telemetry.resample_channels(rule='500ms')
+
+        assert isinstance(result, core.Telemetry)
+        assert len(result) <= len(telemetry)
+        assert 'Date' in result.columns
+        assert 'Speed' in result.columns
+        assert 'RPM' in result.columns
+
+    def test_resample_channels_with_new_date_ref(self):
+        """Test resample_channels with custom new_date_ref parameter"""
+        mock_session = Mock()
+        mock_session.t0_date = pd.Timestamp('2023-01-01 10:00:00')
+
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta(range(0, 1000, 100), unit='ms'),
+            'Date': pd.date_range('2023-01-01 10:00:00', periods=10, freq='100ms'),
+            'SessionTime': pd.to_timedelta(range(0, 1000, 100), unit='ms'),
+            'Speed': [100.0 + i * 10 for i in range(10)],
+            'RPM': [8000 + i * 100 for i in range(10)]
+        })
+        telemetry = core.Telemetry(data, session=mock_session)
+
+        # Create custom date reference with 5 timestamps
+        new_date_ref = pd.Series(pd.date_range('2023-01-01 10:00:00', periods=5, freq='200ms'))
+
+        result = telemetry.resample_channels(new_date_ref=new_date_ref)
+
+        assert isinstance(result, core.Telemetry)
+        assert len(result) == 5
+        assert 'Date' in result.columns
+        assert 'Speed' in result.columns
+        assert 'RPM' in result.columns
+        # Check that the result dates match the new reference
+        assert all(result['Date'].isin(new_date_ref))
+
 
 class TestSession:
     """Tests for Session class"""
