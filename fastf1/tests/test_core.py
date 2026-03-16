@@ -379,6 +379,252 @@ class TestLaps:
         assert result[0][1]['LapNumber'] == 1
         assert result[1][1]['LapNumber'] == 4
 
+    def test_split_qualifying_sessions_not_qualifying_error(self):
+        """Test split_qualifying_sessions raises error when session is not qualifying"""
+        mock_session = Mock()
+        mock_session.name = 'Race'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+
+        laps_data = pd.DataFrame({'LapNumber': [1, 2, 3]})
+        laps = core.Laps(laps_data, session=mock_session)
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.split_qualifying_sessions()
+        assert "not a qualifying session" in str(excinfo.value)
+
+    def test_split_qualifying_sessions_no_session_status_error(self):
+        """Test split_qualifying_sessions raises error when session status unavailable"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session.session_status = None
+
+        laps_data = pd.DataFrame({'LapNumber': [1, 2, 3]})
+        laps = core.Laps(laps_data, session=mock_session)
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.split_qualifying_sessions()
+        assert "Session status data is unavailable" in str(excinfo.value)
+
+    def test_split_qualifying_sessions_with_session_split_times(self):
+        """Test split_qualifying_sessions using session_split_times"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session._session_split_times = [
+            pd.Timedelta('0 days 00:00:00'),
+            pd.Timedelta('0 days 00:20:00')
+        ]
+        mock_session.session_status = pd.DataFrame({
+            'Time': [pd.Timedelta('0 days 00:45:00')],
+            'Status': ['Finished']
+        })
+
+        # Create laps data with LapStartTime
+        laps_data = pd.DataFrame({
+            'LapStartTime': [
+                pd.Timedelta('0 days 00:05:00'),
+                pd.Timedelta('0 days 00:10:00'),
+                pd.Timedelta('0 days 00:25:00'),
+                pd.Timedelta('0 days 00:30:00')
+            ],
+            'Time': [
+                pd.Timedelta('0 days 00:06:30'),
+                pd.Timedelta('0 days 00:11:30'),
+                pd.Timedelta('0 days 00:26:30'),
+                pd.Timedelta('0 days 00:31:30')
+            ],
+            'PitOutTime': [pd.NaT, pd.NaT, pd.NaT, pd.NaT]
+        })
+        laps = core.Laps(laps_data, session=mock_session)
+
+        result = laps.split_qualifying_sessions()
+
+        assert len(result) == 3
+        assert result[0] is not None
+        assert result[1] is not None
+        assert len(result[0]) == 2  # First two laps in Q1
+        assert len(result[1]) == 2  # Last two laps in Q2
+
+    def test_split_qualifying_sessions_with_session_status_parsing(self):
+        """Test split_qualifying_sessions parsing session status Started events"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session._session_split_times = None
+        mock_session.session_status = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:00:00'),
+                pd.Timedelta('0 days 00:20:00'),
+                pd.Timedelta('0 days 00:40:00'),
+                pd.Timedelta('0 days 00:50:00')
+            ],
+            'Status': ['Started', 'Started', 'Started', 'Finished']
+        })
+
+        laps_data = pd.DataFrame({
+            'LapStartTime': [
+                pd.Timedelta('0 days 00:05:00'),
+                pd.Timedelta('0 days 00:25:00'),
+                pd.Timedelta('0 days 00:42:00')
+            ],
+            'Time': [
+                pd.Timedelta('0 days 00:06:30'),
+                pd.Timedelta('0 days 00:26:30'),
+                pd.Timedelta('0 days 00:43:30')
+            ],
+            'PitOutTime': [pd.NaT, pd.NaT, pd.NaT]
+        })
+        laps = core.Laps(laps_data, session=mock_session)
+
+        result = laps.split_qualifying_sessions()
+
+        assert len(result) == 3
+        assert result[0] is not None
+        assert result[1] is not None
+        assert result[2] is not None
+        assert len(result[0]) == 1
+        assert len(result[1]) == 1
+        assert len(result[2]) == 1
+
+    def test_split_qualifying_sessions_with_red_flag(self):
+        """Test split_qualifying_sessions handles red flag (Aborted status)"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session._session_split_times = None
+        mock_session.session_status = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:00:00'),
+                pd.Timedelta('0 days 00:10:00'),
+                pd.Timedelta('0 days 00:15:00'),
+                pd.Timedelta('0 days 00:30:00')
+            ],
+            'Status': ['Started', 'Aborted', 'Started', 'Finished']
+        })
+
+        laps_data = pd.DataFrame({
+            'LapStartTime': [
+                pd.Timedelta('0 days 00:05:00'),
+                pd.Timedelta('0 days 00:08:00')
+            ],
+            'Time': [
+                pd.Timedelta('0 days 00:06:30'),
+                pd.Timedelta('0 days 00:09:30')
+            ],
+            'PitOutTime': [pd.NaT, pd.NaT]
+        })
+        laps = core.Laps(laps_data, session=mock_session)
+
+        result = laps.split_qualifying_sessions()
+
+        assert len(result) == 3
+        # First two laps should be in Q1 (before and after red flag restart is ignored)
+        assert result[0] is not None
+        assert len(result[0]) == 2
+
+    def test_split_qualifying_sessions_with_finished_after_red_flag(self):
+        """Test split_qualifying_sessions handles Finished status after red flag"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session._session_split_times = None
+        mock_session.session_status = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:00:00'),
+                pd.Timedelta('0 days 00:10:00'),
+                pd.Timedelta('0 days 00:15:00'),
+                pd.Timedelta('0 days 00:30:00')
+            ],
+            'Status': ['Started', 'Aborted', 'Finished', 'Finished']
+        })
+
+        laps_data = pd.DataFrame({
+            'LapStartTime': [pd.Timedelta('0 days 00:05:00')],
+            'Time': [pd.Timedelta('0 days 00:06:30')],
+            'PitOutTime': [pd.NaT]
+        })
+        laps = core.Laps(laps_data, session=mock_session)
+
+        result = laps.split_qualifying_sessions()
+
+        assert len(result) == 3
+        assert result[0] is not None
+
+    def test_split_qualifying_sessions_with_early_laps(self):
+        """Test split_qualifying_sessions handles early pit out laps"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session._session_split_times = None
+        mock_session.session_status = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:00:00'),
+                pd.Timedelta('0 days 00:20:00'),
+                pd.Timedelta('0 days 00:45:00')
+            ],
+            'Status': ['Started', 'Started', 'Finished']
+        })
+
+        # Create lap that starts before Q2 but ends after Q2 starts (early pit out)
+        laps_data = pd.DataFrame({
+            'LapStartTime': [
+                pd.Timedelta('0 days 00:05:00'),
+                pd.Timedelta('0 days 00:19:00'),
+                pd.Timedelta('0 days 00:25:00')
+            ],
+            'Time': [
+                pd.Timedelta('0 days 00:06:30'),
+                pd.Timedelta('0 days 00:21:00'),
+                pd.Timedelta('0 days 00:26:30')
+            ],
+            'PitOutTime': [
+                pd.NaT,
+                pd.Timedelta('0 days 00:18:50'),
+                pd.NaT
+            ]
+        })
+        laps = core.Laps(laps_data, session=mock_session)
+
+        result = laps.split_qualifying_sessions()
+
+        assert len(result) == 3
+        assert result[0] is not None
+        assert result[1] is not None
+        # The early lap should be excluded from Q1 and added to Q2
+        assert len(result[1]) == 2
+
+    def test_split_qualifying_sessions_with_empty_session(self):
+        """Test split_qualifying_sessions returns None for empty session"""
+        mock_session = Mock()
+        mock_session.name = 'Qualifying'
+        mock_session._QUALI_LIKE_SESSIONS = ('Qualifying', 'Sprint Qualifying')
+        mock_session._session_split_times = None
+        mock_session.session_status = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:00:00'),
+                pd.Timedelta('0 days 00:20:00'),
+                pd.Timedelta('0 days 00:40:00'),
+                pd.Timedelta('0 days 00:50:00')
+            ],
+            'Status': ['Started', 'Started', 'Started', 'Finished']
+        })
+
+        # No laps in one of the sessions
+        laps_data = pd.DataFrame({
+            'LapStartTime': [pd.Timedelta('0 days 00:05:00')],
+            'Time': [pd.Timedelta('0 days 00:06:30')],
+            'PitOutTime': [pd.NaT]
+        })
+        laps = core.Laps(laps_data, session=mock_session)
+
+        result = laps.split_qualifying_sessions()
+
+        assert len(result) == 3
+        assert result[0] is not None
+        assert result[1] is None  # Q2 should be None (empty)
+        assert result[2] is None  # Q3 should be None (empty)
+
 
 class TestLap:
     """Tests for Lap class"""
