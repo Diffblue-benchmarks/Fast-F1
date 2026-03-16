@@ -649,3 +649,141 @@ def test_get_jwk_from_jwks_uri_returns_first_match():
 
         # Verify the first matching JWK was returned
         assert result == first_jwk
+
+
+def test_run_auth_server_successful_authentication(reset_subscription_token):
+    """Test _run_auth_server successfully runs server and verifies token."""
+    import fastf1.internals.f1auth as f1auth
+
+    # Create mock HTTPServer
+    mock_httpd = MagicMock()
+    mock_httpd.server_port = 8080
+
+    # Create mock thread
+    mock_thread = MagicMock()
+
+    test_token = "valid_auth_token"
+    f1auth._subscription_token = test_token
+
+    with patch("fastf1.internals.f1auth.HTTPServer", return_value=mock_httpd) as mock_server_class:
+        with patch("fastf1.internals.f1auth.threading.Thread", return_value=mock_thread) as mock_thread_class:
+            with patch("fastf1.internals.f1auth._verify_jwt") as mock_verify:
+                with patch("builtins.print") as mock_print:
+                    # Simulate auth_finished event being set immediately
+                    def wait_side_effect():
+                        pass
+
+                    with patch.object(f1auth._auth_finished, 'wait', side_effect=wait_side_effect):
+                        with patch.object(f1auth._auth_finished, 'clear') as mock_clear:
+                            f1auth._run_auth_server()
+
+                            # Verify HTTPServer was created with correct address
+                            mock_server_class.assert_called_once_with(
+                                ('127.0.0.1', 0),
+                                f1auth.AuthHandler
+                            )
+
+                            # Verify auth_finished.clear() was called
+                            mock_clear.assert_called_once()
+
+                            # Verify thread was created and started
+                            mock_thread_class.assert_called_once()
+                            assert mock_thread_class.call_args.kwargs['target'] == mock_httpd.serve_forever
+                            mock_thread.start.assert_called_once()
+
+                            # Verify server shutdown was called
+                            mock_httpd.shutdown.assert_called_once()
+
+                            # Verify token verification was attempted
+                            mock_verify.assert_called_once_with(test_token, f1auth.JWKS_URL)
+
+                            # Verify success message was printed
+                            print_calls = [str(call) for call in mock_print.call_args_list]
+                            assert any("Sign-in successful" in s for s in print_calls)
+                            assert any("https://f1login.fastf1.dev?port=8080" in s for s in print_calls)
+
+
+def test_run_auth_server_with_jwt_verification_failure(reset_subscription_token):
+    """Test _run_auth_server handles PyJWTError during token verification."""
+    import fastf1.internals.f1auth as f1auth
+    from jwt.exceptions import PyJWTError
+
+    # Create mock HTTPServer
+    mock_httpd = MagicMock()
+    mock_httpd.server_port = 3000
+
+    # Create mock thread
+    mock_thread = MagicMock()
+
+    test_token = "invalid_token_for_verification"
+    f1auth._subscription_token = test_token
+
+    with patch("fastf1.internals.f1auth.HTTPServer", return_value=mock_httpd):
+        with patch("fastf1.internals.f1auth.threading.Thread", return_value=mock_thread):
+            with patch("fastf1.internals.f1auth._verify_jwt", side_effect=PyJWTError("Verification failed")):
+                with patch("builtins.print") as mock_print:
+                    # Simulate auth_finished event
+                    with patch.object(f1auth._auth_finished, 'wait'):
+                        with patch.object(f1auth._auth_finished, 'clear'):
+                            f1auth._run_auth_server()
+
+                            # Verify error message was printed
+                            print_calls = [str(call) for call in mock_print.call_args_list]
+                            assert any("Unknown error encountered" in s for s in print_calls)
+                            assert any("token verification failed" in s for s in print_calls)
+
+                            # Verify no success message was printed
+                            assert not any("Sign-in successful" in s for s in print_calls)
+
+
+def test_run_auth_server_starts_thread_with_serve_forever(reset_subscription_token):
+    """Test _run_auth_server starts thread with httpd.serve_forever as target."""
+    import fastf1.internals.f1auth as f1auth
+
+    mock_httpd = MagicMock()
+    mock_httpd.server_port = 9090
+    mock_thread = MagicMock()
+
+    test_token = "thread_test_token"
+    f1auth._subscription_token = test_token
+
+    with patch("fastf1.internals.f1auth.HTTPServer", return_value=mock_httpd):
+        with patch("fastf1.internals.f1auth.threading.Thread", return_value=mock_thread) as mock_thread_class:
+            with patch("fastf1.internals.f1auth._verify_jwt"):
+                with patch("builtins.print"):
+                    with patch.object(f1auth._auth_finished, 'wait'):
+                        with patch.object(f1auth._auth_finished, 'clear'):
+                            f1auth._run_auth_server()
+
+                            # Verify threading.Thread was called with httpd.serve_forever
+                            mock_thread_class.assert_called_once()
+                            assert mock_thread_class.call_args.kwargs['target'] == mock_httpd.serve_forever
+
+                            # Verify thread.start() was called
+                            mock_thread.start.assert_called_once()
+
+
+def test_run_auth_server_waits_for_auth_finished_event(reset_subscription_token):
+    """Test _run_auth_server waits for _auth_finished event before shutting down."""
+    import fastf1.internals.f1auth as f1auth
+
+    mock_httpd = MagicMock()
+    mock_httpd.server_port = 5000
+    mock_thread = MagicMock()
+
+    test_token = "event_wait_token"
+    f1auth._subscription_token = test_token
+
+    with patch("fastf1.internals.f1auth.HTTPServer", return_value=mock_httpd):
+        with patch("fastf1.internals.f1auth.threading.Thread", return_value=mock_thread):
+            with patch("fastf1.internals.f1auth._verify_jwt"):
+                with patch("builtins.print"):
+                    with patch.object(f1auth._auth_finished, 'wait') as mock_wait:
+                        with patch.object(f1auth._auth_finished, 'clear'):
+                            f1auth._run_auth_server()
+
+                            # Verify wait() was called on _auth_finished event
+                            mock_wait.assert_called_once()
+
+                            # Verify shutdown was called after wait
+                            mock_httpd.shutdown.assert_called_once()
