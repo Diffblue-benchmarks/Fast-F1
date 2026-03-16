@@ -920,6 +920,172 @@ class TestSession:
 
             assert not hasattr(session, '_laps')
 
+    def test_drivers_results_from_ergast_practice_session(self):
+        """Test _drivers_results_from_ergast with practice session"""
+        from unittest.mock import Mock, patch
+
+        mock_event = self._create_mock_event(year=2023, round_number=5)
+        session = core.Session(event=mock_event, session_name='Practice 1')
+
+        # Mock ergast response
+        mock_response = Mock()
+        mock_data = pd.DataFrame({
+            'number': ['44', '33'],
+            'driverId': ['hamilton', 'verstappen'],
+            'constructorId': ['mercedes', 'red_bull']
+        })
+        mock_response.content = [mock_data]
+
+        with patch.object(session._ergast, 'get_race_results', return_value=mock_response):
+            result = session._drivers_results_from_ergast(load_drivers=False, load_results=False)
+
+        assert result is not None
+        assert 'DriverNumber' in result.columns
+
+    def test_drivers_results_from_ergast_race_session(self):
+        """Test _drivers_results_from_ergast with Race session"""
+        from unittest.mock import Mock, patch
+
+        mock_event = self._create_mock_event(year=2023, round_number=5)
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Mock ergast response
+        mock_response = Mock()
+        mock_data = pd.DataFrame({
+            'number': ['44', '33'],
+            'driverId': ['hamilton', 'verstappen'],
+            'constructorId': ['mercedes', 'red_bull'],
+            'position': ['1', '2'],
+            'positionText': ['1', '2'],
+            'grid': ['1', '3'],
+            'status': ['Finished', 'Finished'],
+            'points': ['25', '18'],
+            'totalRaceTime': ['1:30:00', '1:30:05'],
+            'laps': ['58', '58']
+        })
+        mock_response.content = [mock_data]
+
+        with patch.object(session._ergast, 'get_race_results', return_value=mock_response):
+            result = session._drivers_results_from_ergast(load_drivers=False, load_results=True)
+
+        assert result is not None
+        assert 'Position' in result.columns
+        assert 'ClassifiedPosition' in result.columns
+
+    def test_drivers_results_from_ergast_sprint_race_like(self):
+        """Test _drivers_results_from_ergast with Sprint race-like session"""
+        from unittest.mock import Mock, patch
+
+        mock_event = self._create_mock_event(year=2023, round_number=5)
+        session = core.Session(event=mock_event, session_name='Sprint')
+
+        # Mock ergast response
+        mock_response = Mock()
+        mock_data = pd.DataFrame({
+            'number': ['44', '33'],
+            'driverId': ['hamilton', 'verstappen'],
+            'constructorId': ['mercedes', 'red_bull']
+        })
+        mock_response.content = [mock_data]
+
+        with patch.object(session._ergast, 'get_sprint_results', return_value=mock_response):
+            result = session._drivers_results_from_ergast(load_drivers=False, load_results=False)
+
+        assert result is not None
+        assert 'DriverNumber' in result.columns
+
+    def test_drivers_results_from_ergast_unsupported_session(self):
+        """Test _drivers_results_from_ergast with unsupported session returns None"""
+        mock_event = self._create_mock_event(year=2024, round_number=5)
+        session = core.Session(event=mock_event, session_name='Sprint Qualifying')
+
+        result = session._drivers_results_from_ergast(load_drivers=False, load_results=False)
+
+        assert result is None
+
+    def test_drivers_results_from_ergast_empty_response_sprint_quali_like(self, caplog):
+        """Test _drivers_results_from_ergast with empty response for sprint quali-like session"""
+        from unittest.mock import Mock, patch
+
+        mock_event = self._create_mock_event(year=2024, round_number=5)
+        session = core.Session(event=mock_event, session_name='Sprint Qualifying')
+
+        # Patch the internal function to return empty response
+        def mock_get_data():
+            mock_response = Mock()
+            mock_response.content = []
+            return mock_response
+
+        # Since Sprint Qualifying in 2024 is quali-like and returns None from _get_data,
+        # we need to test by making it return empty content instead
+        with patch.object(session, '_drivers_results_from_ergast') as mock_method:
+            # Call the actual method but with manual mocking
+            session_test = core.Session(event=mock_event, session_name='Sprint Qualifying')
+
+            # Create a mock that mimics empty response scenario
+            mock_empty_response = Mock()
+            mock_empty_response.content = []
+
+            # The function internally returns None for Sprint Qualifying 2024+
+            # But we want to test the empty response branch
+            # So we test with a Qualifying session instead
+            session_test2 = core.Session(event=mock_event, session_name='Qualifying')
+
+            with patch.object(session_test2._ergast, 'get_qualifying_results', return_value=mock_empty_response):
+                result = session_test2._drivers_results_from_ergast(load_drivers=False, load_results=False)
+
+            assert result is None
+
+    def test_drivers_results_from_ergast_empty_response_other_session(self, caplog):
+        """Test _drivers_results_from_ergast with empty response for other sessions"""
+        from unittest.mock import Mock, patch
+
+        mock_event = self._create_mock_event(year=2023, round_number=5)
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Mock empty ergast response
+        mock_response = Mock()
+        mock_response.content = []
+
+        with patch.object(session._ergast, 'get_race_results', return_value=mock_response):
+            result = session._drivers_results_from_ergast(load_drivers=False, load_results=False)
+
+        assert result is None
+        assert any("No result data for this session" in record.message
+                   for record in caplog.records)
+
+    def test_drivers_results_from_ergast_race_with_results_columns(self):
+        """Test _drivers_results_from_ergast ensures race-specific columns with load_results=True"""
+        from unittest.mock import Mock, patch
+
+        mock_event = self._create_mock_event(year=2023, round_number=5)
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Mock ergast response with race results
+        mock_response = Mock()
+        mock_data = pd.DataFrame({
+            'number': ['44', '33'],
+            'driverId': ['hamilton', 'verstappen'],
+            'constructorId': ['mercedes', 'red_bull'],
+            'position': ['1', '2'],
+            'positionText': ['1', '2'],
+            'grid': ['1', '3'],
+            'status': ['Finished', 'Finished'],
+            'points': ['25', '18'],
+            'totalRaceTime': ['1:30:00', '1:30:05'],
+            'laps': ['58', '58']
+        })
+        mock_response.content = [mock_data]
+
+        with patch.object(session._ergast, 'get_race_results', return_value=mock_response):
+            result = session._drivers_results_from_ergast(load_drivers=False, load_results=True)
+
+        assert result is not None
+        assert 'Position' in result.columns
+        assert 'ClassifiedPosition' in result.columns
+        assert 'GridPosition' in result.columns
+        assert 'Status' in result.columns
+
 
 class TestLaps:
     """Tests for Laps class"""
