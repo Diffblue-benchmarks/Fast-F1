@@ -374,3 +374,319 @@ def test_event_get_practice(mock_event):
     with patch.object(Event, 'get_session') as mock_get_session:
         mock_event.get_practice(1)
         mock_get_session.assert_called_once_with('Practice 1')
+
+
+# Tests for _get_schedule_from_ergast
+@pytest.fixture
+def mock_ergast_conventional_race():
+    """Mock ergast data for a conventional race."""
+    return [{
+        'round': '1',
+        'raceName': 'Bahrain Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Bahrain',
+                'locality': 'Sakhir'
+            }
+        },
+        'date': '2020-03-22',
+        'time': '15:10:00Z'
+    }]
+
+
+@pytest.fixture
+def mock_ergast_sprint_2021():
+    """Mock ergast data for a sprint race in 2021."""
+    return [{
+        'round': '10',
+        'raceName': 'British Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'UK',
+                'locality': 'Silverstone'
+            }
+        },
+        'date': '2021-07-18',
+        'time': '14:00:00Z',
+        'Sprint': {
+            'date': '2021-07-17',
+            'time': '15:30:00Z'
+        }
+    }]
+
+
+@pytest.fixture
+def mock_ergast_sprint_2023():
+    """Mock ergast data for a sprint race in 2023."""
+    return [{
+        'round': '4',
+        'raceName': 'Azerbaijan Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Azerbaijan',
+                'locality': 'Baku'
+            }
+        },
+        'date': '2023-04-30',
+        'time': '11:00:00Z',
+        'Sprint': {
+            'date': '2023-04-29',
+            'time': '10:30:00Z'
+        }
+    }]
+
+
+@pytest.fixture
+def mock_ergast_sprint_2024():
+    """Mock ergast data for a sprint race in 2024."""
+    return [{
+        'round': '6',
+        'raceName': 'Miami Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'USA',
+                'locality': 'Miami'
+            }
+        },
+        'date': '2024-05-05',
+        'time': '19:00:00Z',
+        'Sprint': {
+            'date': '2024-05-04',
+            'time': '18:00:00Z'
+        }
+    }]
+
+
+def test_get_schedule_from_ergast_conventional(mock_ergast_conventional_race):
+    """Test _get_schedule_from_ergast with conventional race format."""
+    with patch('fastf1.ergast.fetch_season', return_value=mock_ergast_conventional_race):
+        result = events._get_schedule_from_ergast(2020)
+
+        assert isinstance(result, EventSchedule)
+        assert result.year == 2020
+        assert len(result) == 1
+        assert result.iloc[0]['RoundNumber'] == 1
+        assert result.iloc[0]['Country'] == 'Bahrain'
+        assert result.iloc[0]['Location'] == 'Sakhir'
+        assert result.iloc[0]['EventName'] == 'Bahrain Grand Prix'
+        assert result.iloc[0]['EventFormat'] == 'conventional'
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Practice 2'
+        assert result.iloc[0]['Session3'] == 'Practice 3'
+        assert result.iloc[0]['Session4'] == 'Qualifying'
+        assert result.iloc[0]['Session5'] == 'Race'
+        assert result.iloc[0]['F1ApiSupport'] == True
+
+
+def test_get_schedule_from_ergast_sprint_2021(mock_ergast_sprint_2021):
+    """Test _get_schedule_from_ergast with 2021 sprint format."""
+    with patch('fastf1.ergast.fetch_season', return_value=mock_ergast_sprint_2021):
+        result = events._get_schedule_from_ergast(2021)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint'
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Qualifying'
+        assert result.iloc[0]['Session3'] == 'Practice 2'
+        assert result.iloc[0]['Session4'] == 'Sprint'
+        assert result.iloc[0]['Session5'] == 'Race'
+
+
+def test_get_schedule_from_ergast_sprint_2022(mock_ergast_sprint_2021):
+    """Test _get_schedule_from_ergast with 2022 sprint format."""
+    with patch('fastf1.ergast.fetch_season', return_value=mock_ergast_sprint_2021):
+        result = events._get_schedule_from_ergast(2022)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint'
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Qualifying'
+        assert result.iloc[0]['Session3'] == 'Practice 2'
+        assert result.iloc[0]['Session4'] == 'Sprint'
+        assert result.iloc[0]['Session5'] == 'Race'
+
+
+def test_get_schedule_from_ergast_sprint_shootout_2023(mock_ergast_sprint_2023):
+    """Test _get_schedule_from_ergast with 2023 sprint shootout format."""
+    with patch('fastf1.ergast.fetch_season', return_value=mock_ergast_sprint_2023):
+        result = events._get_schedule_from_ergast(2023)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint_shootout'
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Qualifying'
+        assert result.iloc[0]['Session3'] == 'Sprint Shootout'
+        assert result.iloc[0]['Session4'] == 'Sprint'
+        assert result.iloc[0]['Session5'] == 'Race'
+
+
+def test_get_schedule_from_ergast_sprint_qualifying_2024(mock_ergast_sprint_2024):
+    """Test _get_schedule_from_ergast with 2024+ sprint qualifying format."""
+    with patch('fastf1.ergast.fetch_season', return_value=mock_ergast_sprint_2024):
+        result = events._get_schedule_from_ergast(2024)
+
+        assert isinstance(result, EventSchedule)
+        assert len(result) == 1
+        assert result.iloc[0]['EventFormat'] == 'sprint_qualifying'
+        assert result.iloc[0]['Session1'] == 'Practice 1'
+        assert result.iloc[0]['Session2'] == 'Sprint Qualifying'
+        assert result.iloc[0]['Session3'] == 'Sprint'
+        assert result.iloc[0]['Session4'] == 'Qualifying'
+        assert result.iloc[0]['Session5'] == 'Race'
+
+
+def test_get_schedule_from_ergast_year_before_2018():
+    """Test _get_schedule_from_ergast sets F1ApiSupport to False for years before 2018."""
+    mock_data = [{
+        'round': '1',
+        'raceName': 'Australian Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Australia',
+                'locality': 'Melbourne'
+            }
+        },
+        'date': '2017-03-26',
+        'time': '05:00:00Z'
+    }]
+
+    with patch('fastf1.ergast.fetch_season', return_value=mock_data):
+        result = events._get_schedule_from_ergast(2017)
+
+        assert result.iloc[0]['F1ApiSupport'] == False
+
+
+def test_get_schedule_from_ergast_with_date_and_time():
+    """Test _get_schedule_from_ergast correctly parses date and time."""
+    mock_data = [{
+        'round': '1',
+        'raceName': 'Test Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Test Country',
+                'locality': 'Test City'
+            }
+        },
+        'date': '2020-03-15',
+        'time': '14:10:00Z'
+    }]
+
+    with patch('fastf1.ergast.fetch_season', return_value=mock_data):
+        result = events._get_schedule_from_ergast(2020)
+
+        assert isinstance(result, EventSchedule)
+        assert result.iloc[0]['EventDate'] == pd.Timestamp('2020-03-15T14:10:00')
+
+
+def test_get_schedule_from_ergast_date_without_time():
+    """Test _get_schedule_from_ergast handles date without time."""
+    mock_data = [{
+        'round': '1',
+        'raceName': 'Test Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Test Country',
+                'locality': 'Test City'
+            }
+        },
+        'date': '2020-03-15'
+    }]
+
+    with patch('fastf1.ergast.fetch_season', return_value=mock_data):
+        result = events._get_schedule_from_ergast(2020)
+
+        assert isinstance(result, EventSchedule)
+        # When time is missing, it should still parse the date correctly
+        assert result.iloc[0]['EventDate'] == pd.Timestamp('2020-03-15')
+
+
+def test_get_schedule_from_ergast_session_dates():
+    """Test _get_schedule_from_ergast correctly calculates session dates."""
+    mock_data = [{
+        'round': '1',
+        'raceName': 'Test Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Test Country',
+                'locality': 'Test City'
+            }
+        },
+        'date': '2020-03-22',
+        'time': '15:10:00Z'
+    }]
+
+    with patch('fastf1.ergast.fetch_season', return_value=mock_data):
+        result = events._get_schedule_from_ergast(2020)
+
+        race_date = pd.Timestamp('2020-03-22T15:10:00')
+        expected_day_minus_2 = race_date.floor('D') - pd.Timedelta(days=2)
+        expected_day_minus_1 = race_date.floor('D') - pd.Timedelta(days=1)
+
+        assert result.iloc[0]['Session1DateUtc'] == expected_day_minus_2
+        assert result.iloc[0]['Session2DateUtc'] == expected_day_minus_2
+        assert result.iloc[0]['Session3DateUtc'] == expected_day_minus_1
+        assert result.iloc[0]['Session4DateUtc'] == expected_day_minus_1
+        assert result.iloc[0]['Session5DateUtc'] == race_date
+
+
+def test_get_schedule_from_ergast_official_event_name():
+    """Test _get_schedule_from_ergast sets OfficialEventName to empty string."""
+    mock_data = [{
+        'round': '1',
+        'raceName': 'Test Grand Prix',
+        'Circuit': {
+            'Location': {
+                'country': 'Test Country',
+                'locality': 'Test City'
+            }
+        },
+        'date': '2020-03-22',
+        'time': '15:10:00Z'
+    }]
+
+    with patch('fastf1.ergast.fetch_season', return_value=mock_data):
+        result = events._get_schedule_from_ergast(2020)
+
+        assert result.iloc[0]['OfficialEventName'] == ""
+
+
+def test_get_schedule_from_ergast_multiple_races():
+    """Test _get_schedule_from_ergast with multiple races."""
+    mock_data = [
+        {
+            'round': '1',
+            'raceName': 'First Grand Prix',
+            'Circuit': {
+                'Location': {
+                    'country': 'Country1',
+                    'locality': 'City1'
+                }
+            },
+            'date': '2020-03-22',
+            'time': '15:10:00Z'
+        },
+        {
+            'round': '2',
+            'raceName': 'Second Grand Prix',
+            'Circuit': {
+                'Location': {
+                    'country': 'Country2',
+                    'locality': 'City2'
+                }
+            },
+            'date': '2020-04-05',
+            'time': '13:00:00Z'
+        }
+    ]
+
+    with patch('fastf1.ergast.fetch_season', return_value=mock_data):
+        result = events._get_schedule_from_ergast(2020)
+
+        assert len(result) == 2
+        assert result.iloc[0]['RoundNumber'] == 1
+        assert result.iloc[1]['RoundNumber'] == 2
+        assert result.iloc[0]['EventName'] == 'First Grand Prix'
+        assert result.iloc[1]['EventName'] == 'Second Grand Prix'
