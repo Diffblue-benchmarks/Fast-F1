@@ -1086,6 +1086,22 @@ class TestSession:
         assert 'GridPosition' in result.columns
         assert 'Status' in result.columns
 
+    def test_drivers_from_f1_api_exception_handling(self, caplog):
+        """Test _drivers_from_f1_api handles exceptions when API fails"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        # Mock api.driver_info to raise an exception
+        with patch('fastf1.core.api.driver_info', side_effect=Exception('API failure')):
+            result = session._drivers_from_f1_api()
+
+        assert result is None
+        assert any("Failed to load extended driver information!" in record.message
+                   for record in caplog.records)
+
 
 class TestLaps:
     """Tests for Laps class"""
