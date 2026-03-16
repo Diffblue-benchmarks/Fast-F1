@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -891,3 +891,61 @@ class TestGetDriverStyle:
 
             # Verify the result
             assert result == {'color': '#ff1e00', 'linestyle': 'solid'}
+
+
+class TestGetTeamNameByDriver:
+    """Tests for get_team_name_by_driver function."""
+
+    def test_get_team_name_by_driver_full_name(self):
+        """Test get_team_name_by_driver returns full team name when short=False."""
+        # This test targets lines 271, 272, 274, 277
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Mercedes-AMG Petronas F1 Team",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="HAM", name="Hamilton", normalized_name="hamilton")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1):
+            # Call the function with short=False (default)
+            result = get_team_name_by_driver("HAM", mock_session, short=False)
+
+            # Verify the result returns the full team name
+            assert result == "Mercedes-AMG Petronas F1 Team"
+
+    def test_get_team_name_by_driver_short_name(self):
+        """Test get_team_name_by_driver returns short team name when short=True."""
+        # This test targets lines 271, 272, 274, 275
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Scuderia Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="LEC", name="Leclerc", normalized_name="leclerc")
+        team1.drivers = [driver1]
+
+        # Mock _get_driver
+        with patch('fastf1.plotting._interface._get_driver', return_value=driver1):
+            # Call the function with short=True
+            result = get_team_name_by_driver("LEC", mock_session, short=True)
+
+            # Verify the result returns the short team name
+            assert result == "Ferrari"
