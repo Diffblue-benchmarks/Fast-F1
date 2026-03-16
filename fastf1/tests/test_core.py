@@ -1234,6 +1234,165 @@ class TestLaps:
         mock_sliced.reset_index.assert_called_once_with(drop=True)
         assert result is mock_reset
 
+    def test_get_telemetry_merges_pos_and_car_data(self):
+        """Test get_telemetry merges position and car data with driver ahead information"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2],
+            'DriverNumber': ['44', '44']
+        })
+        laps = core.Laps(laps_data)
+        laps.session = Mock()
+
+        # Create mock telemetry objects
+        mock_pos_data = MagicMock(spec=core.Telemetry)
+        mock_car_data_padded = MagicMock(spec=core.Telemetry)
+
+        # Mock iloc for driver ahead calculation
+        mock_iloc_result = MagicMock()
+        mock_drv_ahead = MagicMock()
+        mock_iloc_result.add_driver_ahead.return_value = mock_drv_ahead
+        mock_drv_ahead.loc.__getitem__.return_value = mock_drv_ahead
+        mock_car_data_padded.iloc.__getitem__.return_value = mock_iloc_result
+
+        # Mock add_distance and add_relative_distance
+        mock_car_with_distance = MagicMock(spec=core.Telemetry)
+        mock_car_data_padded.add_distance.return_value = mock_car_with_distance
+        mock_car_with_distance.add_relative_distance.return_value = mock_car_with_distance
+
+        # Mock merge_channels
+        mock_car_merged = MagicMock(spec=core.Telemetry)
+        mock_car_with_distance.merge_channels.return_value = mock_car_merged
+
+        mock_final_merged = MagicMock(spec=core.Telemetry)
+        mock_pos_data.merge_channels.return_value = mock_final_merged
+
+        # Mock slice_by_lap
+        mock_result = MagicMock(spec=core.Telemetry)
+        mock_final_merged.slice_by_lap.return_value = mock_result
+
+        # Mock get_pos_data and get_car_data
+        laps.get_pos_data = Mock(return_value=mock_pos_data)
+        laps.get_car_data = Mock(return_value=mock_car_data_padded)
+
+        # Call get_telemetry
+        result = laps.get_telemetry()
+
+        # Verify calls
+        laps.get_pos_data.assert_called_once_with(pad=1, pad_side='both')
+        laps.get_car_data.assert_called_once_with(pad=1, pad_side='both')
+        mock_car_data_padded.iloc.__getitem__.assert_called_once()
+        mock_iloc_result.add_driver_ahead.assert_called_once()
+        mock_car_data_padded.add_distance.assert_called_once()
+        mock_car_with_distance.add_relative_distance.assert_called_once()
+        mock_car_with_distance.merge_channels.assert_called_once_with(mock_drv_ahead, frequency=None)
+        mock_pos_data.merge_channels.assert_called_once_with(mock_car_merged, frequency=None)
+        mock_final_merged.slice_by_lap.assert_called_once_with(laps, interpolate_edges=True)
+
+        assert result is mock_result
+
+    def test_get_telemetry_with_custom_frequency(self):
+        """Test get_telemetry with custom frequency parameter"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [3, 4],
+            'DriverNumber': ['77', '77']
+        })
+        laps = core.Laps(laps_data)
+        laps.session = Mock()
+
+        # Create mock telemetry objects
+        mock_pos_data = MagicMock(spec=core.Telemetry)
+        mock_car_data_padded = MagicMock(spec=core.Telemetry)
+
+        # Mock iloc for driver ahead calculation
+        mock_iloc_result = MagicMock()
+        mock_drv_ahead = MagicMock()
+        mock_iloc_result.add_driver_ahead.return_value = mock_drv_ahead
+        mock_drv_ahead.loc.__getitem__.return_value = mock_drv_ahead
+        mock_car_data_padded.iloc.__getitem__.return_value = mock_iloc_result
+
+        # Mock add_distance and add_relative_distance
+        mock_car_with_distance = MagicMock(spec=core.Telemetry)
+        mock_car_data_padded.add_distance.return_value = mock_car_with_distance
+        mock_car_with_distance.add_relative_distance.return_value = mock_car_with_distance
+
+        # Mock merge_channels
+        mock_car_merged = MagicMock(spec=core.Telemetry)
+        mock_car_with_distance.merge_channels.return_value = mock_car_merged
+
+        mock_final_merged = MagicMock(spec=core.Telemetry)
+        mock_pos_data.merge_channels.return_value = mock_final_merged
+
+        # Mock slice_by_lap
+        mock_result = MagicMock(spec=core.Telemetry)
+        mock_final_merged.slice_by_lap.return_value = mock_result
+
+        # Mock get_pos_data and get_car_data
+        laps.get_pos_data = Mock(return_value=mock_pos_data)
+        laps.get_car_data = Mock(return_value=mock_car_data_padded)
+
+        # Call get_telemetry with custom frequency
+        custom_frequency = 10
+        result = laps.get_telemetry(frequency=custom_frequency)
+
+        # Verify frequency is passed correctly to merge_channels calls
+        laps.get_pos_data.assert_called_once_with(pad=1, pad_side='both')
+        laps.get_car_data.assert_called_once_with(pad=1, pad_side='both')
+        mock_car_with_distance.merge_channels.assert_called_once_with(mock_drv_ahead, frequency=custom_frequency)
+        mock_pos_data.merge_channels.assert_called_once_with(mock_car_merged, frequency=custom_frequency)
+        mock_final_merged.slice_by_lap.assert_called_once_with(laps, interpolate_edges=True)
+
+        assert result is mock_result
+
+    def test_get_telemetry_with_original_frequency(self):
+        """Test get_telemetry with 'original' frequency parameter"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [5],
+            'DriverNumber': ['1']
+        })
+        laps = core.Laps(laps_data)
+        laps.session = Mock()
+
+        # Create mock telemetry objects
+        mock_pos_data = MagicMock(spec=core.Telemetry)
+        mock_car_data_padded = MagicMock(spec=core.Telemetry)
+
+        # Mock iloc for driver ahead calculation
+        mock_iloc_result = MagicMock()
+        mock_drv_ahead = MagicMock()
+        mock_iloc_result.add_driver_ahead.return_value = mock_drv_ahead
+        mock_drv_ahead.loc.__getitem__.return_value = mock_drv_ahead
+        mock_car_data_padded.iloc.__getitem__.return_value = mock_iloc_result
+
+        # Mock add_distance and add_relative_distance
+        mock_car_with_distance = MagicMock(spec=core.Telemetry)
+        mock_car_data_padded.add_distance.return_value = mock_car_with_distance
+        mock_car_with_distance.add_relative_distance.return_value = mock_car_with_distance
+
+        # Mock merge_channels
+        mock_car_merged = MagicMock(spec=core.Telemetry)
+        mock_car_with_distance.merge_channels.return_value = mock_car_merged
+
+        mock_final_merged = MagicMock(spec=core.Telemetry)
+        mock_pos_data.merge_channels.return_value = mock_final_merged
+
+        # Mock slice_by_lap
+        mock_result = MagicMock(spec=core.Telemetry)
+        mock_final_merged.slice_by_lap.return_value = mock_result
+
+        # Mock get_pos_data and get_car_data
+        laps.get_pos_data = Mock(return_value=mock_pos_data)
+        laps.get_car_data = Mock(return_value=mock_car_data_padded)
+
+        # Call get_telemetry with 'original' frequency
+        result = laps.get_telemetry(frequency='original')
+
+        # Verify 'original' frequency is passed correctly to merge_channels calls
+        mock_car_with_distance.merge_channels.assert_called_once_with(mock_drv_ahead, frequency='original')
+        mock_pos_data.merge_channels.assert_called_once_with(mock_car_merged, frequency='original')
+        mock_final_merged.slice_by_lap.assert_called_once_with(laps, interpolate_edges=True)
+
+        assert result is mock_result
+
 
 class TestLap:
     """Tests for Lap class"""
