@@ -172,6 +172,37 @@ class TestTelemetry:
         assert len(result) == 1
         assert result.iloc[0]['Time'] == 5
 
+    def test_integrate_distance_with_data(self):
+        """Test integrate_distance with valid telemetry data"""
+        # Create telemetry with Time (timedelta) and Speed data
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta([0, 1, 2, 3], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0]  # km/h
+        })
+        telemetry = core.Telemetry(data)
+
+        result = telemetry.integrate_distance()
+
+        # Verify result is not empty
+        assert not result.empty
+        assert len(result) == 4
+        # Verify cumulative sum behavior - first value should be 0
+        assert result.iloc[0] == 0.0
+        # Each subsequent value should be greater (cumulative)
+        for i in range(1, len(result)):
+            assert result.iloc[i] > result.iloc[i - 1]
+
+    def test_integrate_distance_with_empty_data(self):
+        """Test integrate_distance with empty telemetry data"""
+        data = pd.DataFrame({'Time': [], 'Speed': []})
+        telemetry = core.Telemetry(data)
+
+        result = telemetry.integrate_distance()
+
+        # Verify result is an empty Series
+        assert isinstance(result, pd.Series)
+        assert result.empty
+
 
 class TestSession:
     """Tests for Session class"""
