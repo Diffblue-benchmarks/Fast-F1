@@ -320,6 +320,66 @@ class TestLap:
         with pytest.raises((exceptions.DataNotLoadedError, AttributeError)):
             _ = lap.telemetry
 
+    def test_get_weather_data_fallback_before_lap_end(self):
+        """Test get_weather_data returns last value before lap end when no data within lap"""
+        # Create mock session with weather data that only exists before the lap
+        mock_session = Mock()
+        weather_data = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:00:50'),
+                pd.Timedelta('0 days 00:01:00')
+            ],
+            'AirTemp': [22.0, 23.0],
+            'TrackTemp': [35.0, 36.0]
+        })
+        mock_session.weather_data = weather_data
+
+        # Create lap that starts after all weather data
+        lap_data = pd.Series({
+            'LapStartTime': pd.Timedelta('0 days 00:01:20'),
+            'Time': pd.Timedelta('0 days 00:02:00')
+        })
+        lap = core.Lap(lap_data)
+        lap.session = mock_session
+
+        result = lap.get_weather_data()
+
+        # Should return the last weather data point before lap end (second row)
+        assert result['Time'] == pd.Timedelta('0 days 00:01:00')
+        assert result['AirTemp'] == 23.0
+        assert result['TrackTemp'] == 36.0
+
+    def test_get_weather_data_no_data_available(self):
+        """Test get_weather_data returns Series with NaN values when no weather data available"""
+        # Create mock session with weather data that only exists after the lap
+        mock_session = Mock()
+        weather_data = pd.DataFrame({
+            'Time': [
+                pd.Timedelta('0 days 00:03:00'),
+                pd.Timedelta('0 days 00:04:00')
+            ],
+            'AirTemp': [22.0, 23.0],
+            'TrackTemp': [35.0, 36.0]
+        })
+        mock_session.weather_data = weather_data
+
+        # Create lap that ends before any weather data
+        lap_data = pd.Series({
+            'LapStartTime': pd.Timedelta('0 days 00:01:00'),
+            'Time': pd.Timedelta('0 days 00:02:00')
+        })
+        lap = core.Lap(lap_data)
+        lap.session = mock_session
+
+        result = lap.get_weather_data()
+
+        # Should return Series with correct column names but NaN values
+        assert isinstance(result, pd.Series)
+        assert list(result.index) == list(weather_data.columns)
+        assert pd.isna(result['Time'])
+        assert pd.isna(result['AirTemp'])
+        assert pd.isna(result['TrackTemp'])
+
 
 class TestDriverResult:
     """Tests for DriverResult class"""
