@@ -681,6 +681,96 @@ class TestLaps:
         assert result[1] is None  # Q2 should be None (empty)
         assert result[2] is None  # Q3 should be None (empty)
 
+    def test_pick_track_status_equals(self):
+        """Test pick_track_status with how='equals' matches exact status"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4],
+            'TrackStatus': ['1', '2', '267', '2']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_track_status('2', how='equals')
+        assert len(result) == 2
+        assert 2 in result['LapNumber'].values
+        assert 4 in result['LapNumber'].values
+        assert 3 not in result['LapNumber'].values
+
+    def test_pick_track_status_contains(self):
+        """Test pick_track_status with how='contains' matches status substring"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4, 5],
+            'TrackStatus': ['1', '2', '267', '26', '7']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_track_status('2', how='contains')
+        assert len(result) == 3
+        assert 2 in result['LapNumber'].values
+        assert 3 in result['LapNumber'].values
+        assert 4 in result['LapNumber'].values
+        assert 1 not in result['LapNumber'].values
+        assert 5 not in result['LapNumber'].values
+
+    def test_pick_track_status_excludes(self):
+        """Test pick_track_status with how='excludes' excludes status substring"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4, 5],
+            'TrackStatus': ['1', '267', '27', '6', '2']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_track_status('26', how='excludes')
+        assert len(result) == 4
+        assert 1 in result['LapNumber'].values
+        assert 3 in result['LapNumber'].values
+        assert 4 in result['LapNumber'].values
+        assert 5 in result['LapNumber'].values
+        assert 2 not in result['LapNumber'].values  # '267' contains '26'
+
+    def test_pick_track_status_any(self):
+        """Test pick_track_status with how='any' matches any character in status"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4, 5],
+            'TrackStatus': ['1', '2', '6', '267', '345']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_track_status('26', how='any')
+        assert len(result) == 3
+        assert 2 in result['LapNumber'].values  # contains '2'
+        assert 3 in result['LapNumber'].values  # contains '6'
+        assert 4 in result['LapNumber'].values  # contains both '2' and '6'
+        assert 1 not in result['LapNumber'].values
+        assert 5 not in result['LapNumber'].values
+
+    def test_pick_track_status_none(self):
+        """Test pick_track_status with how='none' excludes any character in status"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4, 5],
+            'TrackStatus': ['1', '12', '16', '267', '345']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_track_status('26', how='none')
+        assert len(result) == 2
+        assert 1 in result['LapNumber'].values  # no '2' or '6'
+        assert 5 in result['LapNumber'].values  # no '2' or '6'
+        assert 2 not in result['LapNumber'].values  # contains '2'
+        assert 3 not in result['LapNumber'].values  # contains '6'
+        assert 4 not in result['LapNumber'].values  # contains both
+
+    def test_pick_track_status_invalid_how(self):
+        """Test pick_track_status raises ValueError for invalid how parameter"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'TrackStatus': ['1', '2', '3']
+        })
+        laps = core.Laps(laps_data)
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.pick_track_status('1', how='invalid')
+        assert "Invalid value 'invalid' for kwarg 'how'" in str(excinfo.value)
+
 
 class TestLap:
     """Tests for Lap class"""
