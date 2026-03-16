@@ -295,6 +295,62 @@ class TestLaps:
         result = laps.pick_wo_box()
         assert len(result) == 2  # Only laps 1 and 4 should remain
 
+    def test_pick_box_laps_in(self):
+        """Test pick_box_laps with which='in' returns only in-laps"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4],
+            'PitInTime': [pd.NaT, pd.Timedelta('0 days 00:00:05'), pd.NaT, pd.Timedelta('0 days 00:00:15')],
+            'PitOutTime': [pd.NaT, pd.NaT, pd.Timedelta('0 days 00:00:10'), pd.NaT]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_box_laps(which='in')
+        assert len(result) == 2
+        assert 2 in result['LapNumber'].values
+        assert 4 in result['LapNumber'].values
+
+    def test_pick_box_laps_out(self):
+        """Test pick_box_laps with which='out' returns only out-laps"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4],
+            'PitInTime': [pd.NaT, pd.Timedelta('0 days 00:00:05'), pd.NaT, pd.Timedelta('0 days 00:00:15')],
+            'PitOutTime': [pd.NaT, pd.NaT, pd.Timedelta('0 days 00:00:10'), pd.NaT]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_box_laps(which='out')
+        assert len(result) == 1
+        assert 3 in result['LapNumber'].values
+
+    def test_pick_box_laps_both(self):
+        """Test pick_box_laps with which='both' returns both in-laps and out-laps"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4, 5],
+            'PitInTime': [pd.NaT, pd.Timedelta('0 days 00:00:05'), pd.NaT, pd.Timedelta('0 days 00:00:15'), pd.Timedelta('0 days 00:00:20')],
+            'PitOutTime': [pd.NaT, pd.NaT, pd.Timedelta('0 days 00:00:10'), pd.NaT, pd.Timedelta('0 days 00:00:21')]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_box_laps(which='both')
+        assert len(result) == 4
+        assert 2 in result['LapNumber'].values
+        assert 3 in result['LapNumber'].values
+        assert 4 in result['LapNumber'].values
+        assert 5 in result['LapNumber'].values
+
+    def test_pick_box_laps_invalid_which(self):
+        """Test pick_box_laps raises ValueError for invalid which parameter"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'PitInTime': [pd.NaT, pd.NaT, pd.NaT],
+            'PitOutTime': [pd.NaT, pd.NaT, pd.NaT]
+        })
+        laps = core.Laps(laps_data)
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.pick_box_laps(which='invalid')
+        assert "Invalid value 'invalid' for kwarg 'which'" in str(excinfo.value)
+
     def test_pick_accurate(self):
         """Test pick_accurate filters laps by accuracy"""
         laps_data = pd.DataFrame({
