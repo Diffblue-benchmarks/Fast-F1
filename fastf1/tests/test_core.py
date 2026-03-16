@@ -1074,6 +1074,86 @@ class TestLaps:
         assert list(result['LapNumber']) == [1.0, 3.0, 5.0]
         assert list(result['Driver']) == ['HAM', 'LEC', 'NOR']
 
+    def test_get_pos_data_no_driver_number(self):
+        """Test get_pos_data raises ValueError when no driver number is present"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [],
+            'DriverNumber': []
+        })
+        laps = core.Laps(laps_data)
+        mock_session = Mock()
+        laps.session = mock_session
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.get_pos_data()
+        assert "Cannot slice telemetry because self contains no driver number!" in str(excinfo.value)
+
+    def test_get_pos_data_multiple_drivers(self):
+        """Test get_pos_data raises ValueError when multiple drivers are present"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4],
+            'DriverNumber': ['44', '44', '1', '16']
+        })
+        laps = core.Laps(laps_data)
+        mock_session = Mock()
+        laps.session = mock_session
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.get_pos_data()
+        assert "Cannot slice telemetry because self contains Laps of multiple drivers!" in str(excinfo.value)
+
+    def test_get_pos_data_single_driver(self):
+        """Test get_pos_data returns position data for single driver"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'DriverNumber': ['44', '44', '44']
+        })
+        laps = core.Laps(laps_data)
+
+        # Create mock session with pos_data
+        mock_session = Mock()
+        mock_telemetry = Mock(spec=core.Telemetry)
+        mock_sliced = Mock(spec=core.Telemetry)
+        mock_reset = Mock(spec=core.Telemetry)
+
+        mock_telemetry.slice_by_lap.return_value = mock_sliced
+        mock_sliced.reset_index.return_value = mock_reset
+        mock_session.pos_data = {'44': mock_telemetry}
+
+        laps.session = mock_session
+
+        result = laps.get_pos_data()
+
+        mock_telemetry.slice_by_lap.assert_called_once_with(laps)
+        mock_sliced.reset_index.assert_called_once_with(drop=True)
+        assert result is mock_reset
+
+    def test_get_pos_data_with_kwargs(self):
+        """Test get_pos_data passes kwargs to slice_by_lap"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2],
+            'DriverNumber': ['1', '1']
+        })
+        laps = core.Laps(laps_data)
+
+        # Create mock session with pos_data
+        mock_session = Mock()
+        mock_telemetry = Mock(spec=core.Telemetry)
+        mock_sliced = Mock(spec=core.Telemetry)
+        mock_reset = Mock(spec=core.Telemetry)
+
+        mock_telemetry.slice_by_lap.return_value = mock_sliced
+        mock_sliced.reset_index.return_value = mock_reset
+        mock_session.pos_data = {'1': mock_telemetry}
+
+        laps.session = mock_session
+
+        result = laps.get_pos_data(pad=2, pad_side='right')
+
+        mock_telemetry.slice_by_lap.assert_called_once_with(laps, pad=2, pad_side='right')
+        mock_sliced.reset_index.assert_called_once_with(drop=True)
+        assert result is mock_reset
+
 
 class TestLap:
     """Tests for Lap class"""
