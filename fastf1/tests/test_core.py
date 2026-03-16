@@ -575,6 +575,352 @@ class TestSession:
         assert "Invalid driver identifier 'INVALID'" in str(excinfo.value)
 
 
+    def test_load_telemetry_success_with_car_and_pos_data(self):
+        """Test _load_telemetry successfully loads car and position data"""
+        from unittest.mock import patch, MagicMock
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        # Set up results for drivers
+        results_data = pd.DataFrame({
+            'DriverNumber': ['44', '1']
+        })
+        session._results = core.SessionResults(results_data)
+
+        # Create mock telemetry data
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)],
+                'Speed': [100.0, 110.0, 120.0]
+            }),
+            '1': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)],
+                'Speed': [105.0, 115.0, 125.0]
+            })
+        }
+
+        pos_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)],
+                'X': [100, 200, 300]
+            }),
+            '1': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)],
+                'X': [110, 210, 310]
+            })
+        }
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw) as mock_car_data, \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw) as mock_pos_data:
+
+            session._load_telemetry()
+
+            mock_car_data.assert_called_once_with('/test/path', livedata=None)
+            mock_pos_data.assert_called_once_with('/test/path', livedata=None)
+
+            assert hasattr(session, '_car_data')
+            assert hasattr(session, '_pos_data')
+            assert isinstance(session._car_data, dict)
+            assert isinstance(session._pos_data, dict)
+            assert '44' in session._car_data
+            assert '1' in session._car_data
+
+    def test_load_telemetry_car_data_not_available(self, caplog):
+        """Test _load_telemetry handles SessionNotAvailableError for car data"""
+        from unittest.mock import patch
+        from fastf1._api import SessionNotAvailableError
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44']})
+        session._results = core.SessionResults(results_data)
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        pos_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)],
+                'X': [100, 200, 300]
+            })
+        }
+
+        with patch('fastf1.core.api.car_data', side_effect=SessionNotAvailableError), \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw):
+
+            session._load_telemetry()
+
+            assert any("Car telemetry data is unavailable!" in record.message
+                      for record in caplog.records)
+            assert hasattr(session, '_car_data')
+            assert hasattr(session, '_pos_data')
+
+    def test_load_telemetry_pos_data_not_available(self, caplog):
+        """Test _load_telemetry handles SessionNotAvailableError for position data"""
+        from unittest.mock import patch
+        from fastf1._api import SessionNotAvailableError
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44']})
+        session._results = core.SessionResults(results_data)
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)],
+                'Speed': [100.0, 110.0, 120.0]
+            })
+        }
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw), \
+             patch('fastf1.core.api.position_data', side_effect=SessionNotAvailableError):
+
+            session._load_telemetry()
+
+            assert any("Car position data is unavailable!" in record.message
+                      for record in caplog.records)
+            assert hasattr(session, '_car_data')
+            assert hasattr(session, '_pos_data')
+
+    def test_load_telemetry_both_data_unavailable(self, caplog):
+        """Test _load_telemetry handles both car and position data unavailable"""
+        from unittest.mock import patch
+        from fastf1._api import SessionNotAvailableError
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44']})
+        session._results = core.SessionResults(results_data)
+
+        with patch('fastf1.core.api.car_data', side_effect=SessionNotAvailableError), \
+             patch('fastf1.core.api.position_data', side_effect=SessionNotAvailableError):
+
+            session._load_telemetry()
+
+            assert any("Car telemetry data is unavailable!" in record.message
+                      for record in caplog.records)
+            assert any("Car position data is unavailable!" in record.message
+                      for record in caplog.records)
+
+    def test_load_telemetry_with_livedata(self):
+        """Test _load_telemetry passes livedata parameter to API calls"""
+        from unittest.mock import patch, MagicMock
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44']})
+        session._results = core.SessionResults(results_data)
+
+        mock_livedata = MagicMock()
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date],
+                'Time': [pd.Timedelta(seconds=0)],
+                'Speed': [100.0]
+            })
+        }
+        pos_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date],
+                'Time': [pd.Timedelta(seconds=0)],
+                'X': [100]
+            })
+        }
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw) as mock_car_data, \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw) as mock_pos_data:
+
+            session._load_telemetry(livedata=mock_livedata)
+
+            mock_car_data.assert_called_once_with('/test/path', livedata=mock_livedata)
+            mock_pos_data.assert_called_once_with('/test/path', livedata=mock_livedata)
+
+    def test_load_telemetry_processes_telemetry_for_each_driver(self):
+        """Test _load_telemetry creates Telemetry objects for each driver"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44', '1', '16']})
+        session._results = core.SessionResults(results_data)
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [100.0, 110.0]
+            }),
+            '1': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [105.0, 115.0]
+            }),
+            '16': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [102.0, 112.0]
+            })
+        }
+
+        pos_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'X': [100, 200]
+            }),
+            '1': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'X': [110, 210]
+            }),
+            '16': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'X': [105, 205]
+            })
+        }
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw), \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw):
+
+            session._load_telemetry()
+
+            assert len(session._car_data) == 3
+            assert len(session._pos_data) == 3
+            assert '44' in session._car_data and '44' in session._pos_data
+            assert '1' in session._car_data and '1' in session._pos_data
+            assert '16' in session._car_data and '16' in session._pos_data
+
+    def test_load_telemetry_handles_missing_driver_data(self):
+        """Test _load_telemetry handles KeyError when driver data is missing"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44', '1', '16']})
+        session._results = core.SessionResults(results_data)
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [100.0, 110.0]
+            }),
+            '1': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [105.0, 115.0]
+            })
+        }
+
+        pos_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'X': [100, 200]
+            })
+        }
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw), \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw):
+
+            session._load_telemetry()
+
+            assert '44' in session._car_data
+            assert '1' in session._car_data
+            assert '16' not in session._car_data
+            assert '44' in session._pos_data
+            assert '1' not in session._pos_data
+            assert '16' not in session._pos_data
+
+    def test_load_telemetry_adds_lap_start_date(self):
+        """Test _load_telemetry adds LapStartDate column when laps exist"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44']})
+        session._results = core.SessionResults(results_data)
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [100.0, 110.0]
+            })
+        }
+        pos_data_raw = {}
+
+        laps_data = pd.DataFrame({
+            'LapStartTime': [pd.Timedelta('0 days 00:01:00'), pd.Timedelta('0 days 00:02:00')],
+            'Time': [pd.Timedelta('0 days 00:01:30'), pd.Timedelta('0 days 00:02:30')]
+        })
+        session._laps = core.Laps(laps_data, session=session)
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw), \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw):
+
+            session._load_telemetry()
+
+            assert 'LapStartDate' in session._laps.columns
+            assert session._laps['LapStartDate'][0] == session._laps['LapStartTime'][0] + session.t0_date
+
+    def test_load_telemetry_without_laps(self):
+        """Test _load_telemetry works when laps have not been loaded"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+        session.api_path = '/test/path'
+
+        results_data = pd.DataFrame({'DriverNumber': ['44']})
+        session._results = core.SessionResults(results_data)
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        car_data_raw = {
+            '44': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(2)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(2)],
+                'Speed': [100.0, 110.0]
+            })
+        }
+        pos_data_raw = {}
+
+        with patch('fastf1.core.api.car_data', return_value=car_data_raw), \
+             patch('fastf1.core.api.position_data', return_value=pos_data_raw):
+
+            session._load_telemetry()
+
+            assert not hasattr(session, '_laps')
+
+
 class TestLaps:
     """Tests for Laps class"""
 
