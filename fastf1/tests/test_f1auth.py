@@ -537,3 +537,115 @@ def test_verify_jwt_converts_jwk_to_public_key():
                     # Verify jwt.decode was called with the public key
                     assert mock_decode.call_args.kwargs['key'] == mock_public_key
                     assert result == expected_payload
+
+
+def test_get_jwk_from_jwks_uri_with_matching_kid():
+    """Test _get_jwk_from_jwks_uri returns the correct key when kid matches."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "matching_kid_123"
+    test_jwk = {
+        'kid': test_kid,
+        'kty': 'RSA',
+        'n': 'test_modulus',
+        'e': 'AQAB'
+    }
+    jwks_response = {
+        'keys': [
+            {'kid': 'other_kid_1', 'kty': 'RSA'},
+            test_jwk,
+            {'kid': 'other_kid_2', 'kty': 'RSA'}
+        ]
+    }
+
+    # Mock requests.get
+    mock_response = MagicMock()
+    mock_response.json.return_value = jwks_response
+
+    with patch("requests.get", return_value=mock_response) as mock_get:
+        result = f1auth._get_jwk_from_jwks_uri(test_jwks_uri, test_kid)
+
+        # Verify requests.get was called with the correct URI
+        mock_get.assert_called_once_with(test_jwks_uri)
+
+        # Verify raise_for_status was called
+        mock_response.raise_for_status.assert_called_once()
+
+        # Verify the correct JWK was returned
+        assert result == test_jwk
+
+
+def test_get_jwk_from_jwks_uri_with_kid_not_found():
+    """Test _get_jwk_from_jwks_uri raises ValueError when kid not found."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "nonexistent_kid"
+    jwks_response = {
+        'keys': [
+            {'kid': 'kid_1', 'kty': 'RSA'},
+            {'kid': 'kid_2', 'kty': 'RSA'}
+        ]
+    }
+
+    # Mock requests.get
+    mock_response = MagicMock()
+    mock_response.json.return_value = jwks_response
+
+    with patch("requests.get", return_value=mock_response):
+        with pytest.raises(ValueError) as exc_info:
+            f1auth._get_jwk_from_jwks_uri(test_jwks_uri, test_kid)
+
+        # Verify the error message
+        assert "Public key not found" in str(exc_info.value)
+
+
+def test_get_jwk_from_jwks_uri_with_http_error():
+    """Test _get_jwk_from_jwks_uri handles HTTP errors correctly."""
+    import fastf1.internals.f1auth as f1auth
+    from requests.exceptions import HTTPError
+
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "test_kid"
+
+    # Mock requests.get with a response that raises HTTPError
+    mock_response = MagicMock()
+    mock_response.raise_for_status.side_effect = HTTPError("404 Not Found")
+
+    with patch("requests.get", return_value=mock_response):
+        with pytest.raises(HTTPError):
+            f1auth._get_jwk_from_jwks_uri(test_jwks_uri, test_kid)
+
+
+def test_get_jwk_from_jwks_uri_returns_first_match():
+    """Test _get_jwk_from_jwks_uri returns the first matching key if multiple exist."""
+    import fastf1.internals.f1auth as f1auth
+
+    test_jwks_uri = "https://example.com/jwks.json"
+    test_kid = "duplicate_kid"
+    first_jwk = {
+        'kid': test_kid,
+        'kty': 'RSA',
+        'n': 'first_modulus',
+        'e': 'AQAB'
+    }
+    second_jwk = {
+        'kid': test_kid,
+        'kty': 'RSA',
+        'n': 'second_modulus',
+        'e': 'AQAB'
+    }
+    jwks_response = {
+        'keys': [first_jwk, second_jwk]
+    }
+
+    # Mock requests.get
+    mock_response = MagicMock()
+    mock_response.json.return_value = jwks_response
+
+    with patch("requests.get", return_value=mock_response):
+        result = f1auth._get_jwk_from_jwks_uri(test_jwks_uri, test_kid)
+
+        # Verify the first matching JWK was returned
+        assert result == first_jwk
