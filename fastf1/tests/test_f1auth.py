@@ -995,6 +995,26 @@ def test_auth_handler_do_post_with_empty_data_field(reset_subscription_token):
     assert f1auth._auth_finished.is_set()
 
 
+def test_auth_handler_send_cors_headers():
+    """Test AuthHandler._send_cors_headers sends all required CORS headers."""
+    import fastf1.internals.f1auth as f1auth
+
+    # Create a handler instance without calling __init__
+    handler = f1auth.AuthHandler.__new__(f1auth.AuthHandler)
+
+    # Mock the send_header method
+    handler.send_header = MagicMock()
+
+    # Call _send_cors_headers
+    handler._send_cors_headers()
+
+    # Verify all CORS headers were sent
+    assert handler.send_header.call_count == 3
+    handler.send_header.assert_any_call('Access-Control-Allow-Origin', '*')
+    handler.send_header.assert_any_call('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    handler.send_header.assert_any_call('Access-Control-Allow-Headers', 'Content-Type')
+
+
 def test_auth_handler_do_options():
     """Test AuthHandler.do_OPTIONS handles OPTIONS request with CORS headers."""
     import fastf1.internals.f1auth as f1auth
