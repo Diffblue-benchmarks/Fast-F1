@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name, _get_team_exact, _get_team_fuzzy
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names, get_driver_color_mapping, get_driver_style, get_team_name_by_driver, get_team_name, _get_team_exact, _get_team_fuzzy, _get_driver_exact
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -1057,6 +1057,111 @@ class TestGetTeamName:
 
             # Verify the result returns the short team name
             assert result == "McLaren"
+
+
+class TestGetDriverExact:
+    """Tests for _get_driver_exact function."""
+
+    def test_get_driver_exact_by_abbreviation(self):
+        """Test _get_driver_exact when identifier matches driver abbreviation."""
+        # This test targets lines 91, 92, 95, 96
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Mercedes-AMG Petronas F1 Team",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="HAM", name="Lewis Hamilton", normalized_name="lewis hamilton")
+        team1.drivers = [driver1]
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {"HAM": driver1}
+        mock_dtm.drivers_by_normalized = {"lewis hamilton": driver1}
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', side_effect=lambda x: x):
+            # Call with driver abbreviation
+            result = _get_driver_exact("ham", mock_session)
+
+            # Verify the correct driver was returned
+            assert result == driver1
+            assert result.abbreviation == "HAM"
+            assert result.name == "Lewis Hamilton"
+
+    def test_get_driver_exact_by_normalized_name(self):
+        """Test _get_driver_exact when identifier matches normalized driver name."""
+        # This test targets lines 91, 92, 95, 99, 100
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Scuderia Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="LEC", name="Charles Leclerc", normalized_name="charles leclerc")
+        team1.drivers = [driver1]
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {"LEC": driver1}
+        mock_dtm.drivers_by_normalized = {"charles leclerc": driver1}
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', side_effect=lambda x: x):
+            # Call with normalized driver name (not abbreviation)
+            result = _get_driver_exact("charles leclerc", mock_session)
+
+            # Verify the correct driver was returned
+            assert result == driver1
+            assert result.abbreviation == "LEC"
+            assert result.name == "Charles Leclerc"
+
+    def test_get_driver_exact_no_match_raises_keyerror(self):
+        """Test _get_driver_exact raises KeyError when no match is found."""
+        # This test targets lines 91, 92, 95, 99, 102
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock team
+        team1 = Team(
+            name="Red Bull Racing",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+
+        # Create mock driver
+        driver1 = Driver(team=team1, abbreviation="VER", name="Max Verstappen", normalized_name="max verstappen")
+        team1.drivers = [driver1]
+
+        # Create mock driver-team mapping
+        mock_dtm = Mock()
+        mock_dtm.drivers_by_abbreviation = {"VER": driver1}
+        mock_dtm.drivers_by_normalized = {"max verstappen": driver1}
+
+        # Mock _get_driver_team_mapping and _normalize_string
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm), \
+             patch('fastf1.plotting._interface._normalize_string', side_effect=lambda x: x):
+            # Call with an identifier that doesn't match anything
+            with pytest.raises(KeyError, match="No driver found for 'nonexistent driver' \\(exact match only\\)"):
+                _get_driver_exact("nonexistent driver", mock_session)
 
 
 class TestGetTeamExact:
