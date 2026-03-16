@@ -994,6 +994,86 @@ class TestLaps:
         assert all(result['DriverNumber'] == '1')
         assert list(result['LapNumber']) == [2, 4]
 
+    def test_pick_laps_single_int(self):
+        """Test pick_laps with a single integer"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1.0, 2.0, 3.0, 4.0, 5.0],
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_laps(3)
+        assert isinstance(result, core.Laps)
+        assert len(result) == 1
+        assert result.iloc[0]['LapNumber'] == 3.0
+        assert result.iloc[0]['Driver'] == 'LEC'
+
+    def test_pick_laps_single_float_integer(self):
+        """Test pick_laps with a single float that is an integer value"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1.0, 2.0, 3.0, 4.0, 5.0],
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_laps(2.0)
+        assert isinstance(result, core.Laps)
+        assert len(result) == 1
+        assert result.iloc[0]['LapNumber'] == 2.0
+        assert result.iloc[0]['Driver'] == 'VER'
+
+    def test_pick_laps_invalid_float(self):
+        """Test pick_laps raises ValueError for non-integer float"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1.0, 2.0, 3.0, 4.0, 5.0],
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR']
+        })
+        laps = core.Laps(laps_data)
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.pick_laps(2.5)
+        assert "Invalid value 2.5 in `lap_numbers`" in str(excinfo.value)
+
+    def test_pick_laps_iterable_with_range(self):
+        """Test pick_laps with a range iterable"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1.0, 2.0, 3.0, 4.0, 5.0],
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_laps(range(2, 5))
+        assert isinstance(result, core.Laps)
+        assert len(result) == 3
+        assert list(result['LapNumber']) == [2.0, 3.0, 4.0]
+        assert list(result['Driver']) == ['VER', 'LEC', 'SAI']
+
+    def test_pick_laps_list_with_invalid_float(self):
+        """Test pick_laps raises ValueError when list contains non-integer float"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1.0, 2.0, 3.0, 4.0, 5.0],
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR']
+        })
+        laps = core.Laps(laps_data)
+
+        with pytest.raises(ValueError) as excinfo:
+            laps.pick_laps([1, 2.5, 3])
+        assert "Invalid value 2.5 in `lap_numbers`" in str(excinfo.value)
+
+    def test_pick_laps_list_with_valid_floats(self):
+        """Test pick_laps with a list containing integer-valued floats"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1.0, 2.0, 3.0, 4.0, 5.0],
+            'Driver': ['HAM', 'VER', 'LEC', 'SAI', 'NOR']
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_laps([1.0, 3.0, 5.0])
+        assert isinstance(result, core.Laps)
+        assert len(result) == 3
+        assert list(result['LapNumber']) == [1.0, 3.0, 5.0]
+        assert list(result['Driver']) == ['HAM', 'LEC', 'NOR']
+
 
 class TestLap:
     """Tests for Lap class"""
