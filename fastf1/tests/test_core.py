@@ -257,6 +257,140 @@ class TestSession:
         with pytest.raises(exceptions.DataNotLoadedError):
             _ = session.t0_date
 
+    def test_calculate_t0_date_with_no_data(self, caplog):
+        """Test _calculate_t0_date with no telemetry data sets"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        session._calculate_t0_date()
+
+        assert session._t0_date is None
+        assert any("Failed to determine `Session.t0_date`" in record.message
+                   for record in caplog.records)
+
+    def test_calculate_t0_date_with_empty_data_sets(self, caplog):
+        """Test _calculate_t0_date with empty telemetry data dictionaries"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        empty_dict1 = {}
+        empty_dict2 = {}
+
+        session._calculate_t0_date(empty_dict1, empty_dict2)
+
+        assert session._t0_date is None
+        assert any("Failed to determine `Session.t0_date`" in record.message
+                   for record in caplog.records)
+
+    def test_calculate_t0_date_with_single_dataset(self):
+        """Test _calculate_t0_date with single telemetry dataset"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Create test data with Date and Time columns
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+        tel_data = {
+            'HAM': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)]
+            }),
+            'VER': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)]
+            })
+        }
+
+        session._calculate_t0_date(tel_data)
+
+        assert session._t0_date is not None
+        assert isinstance(session._t0_date, pd.Timestamp)
+        # Should be rounded to milliseconds
+        assert session._t0_date == base_date.round('ms')
+
+    def test_calculate_t0_date_with_multiple_datasets(self):
+        """Test _calculate_t0_date with multiple telemetry datasets"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+
+        # First dataset with earlier offset
+        tel_data1 = {
+            'HAM': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)]
+            })
+        }
+
+        # Second dataset with later offset (this should be the max)
+        later_date = base_date + pd.Timedelta(seconds=10)
+        tel_data2 = {
+            'VER': pd.DataFrame({
+                'Date': [later_date + pd.Timedelta(seconds=i) for i in range(3)],
+                'Time': [pd.Timedelta(seconds=i) for i in range(3)]
+            })
+        }
+
+        session._calculate_t0_date(tel_data1, tel_data2)
+
+        assert session._t0_date is not None
+        # Should use the latest offset
+        assert session._t0_date == later_date.round('ms')
+
+    def test_calculate_t0_date_with_varying_delays(self):
+        """Test _calculate_t0_date correctly handles varying delays in data"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        base_date = pd.Timestamp('2023-05-20 12:00:00')
+
+        # Create data with different delays (Date - Time should vary)
+        tel_data = {
+            'HAM': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=5),
+                        base_date + pd.Timedelta(seconds=10),
+                        base_date + pd.Timedelta(seconds=15)],
+                'Time': [pd.Timedelta(seconds=0),
+                        pd.Timedelta(seconds=3),
+                        pd.Timedelta(seconds=5)]
+            }),
+            'VER': pd.DataFrame({
+                'Date': [base_date + pd.Timedelta(seconds=8),
+                        base_date + pd.Timedelta(seconds=12)],
+                'Time': [pd.Timedelta(seconds=0),
+                        pd.Timedelta(seconds=2)]
+            })
+        }
+
+        session._calculate_t0_date(tel_data)
+
+        assert session._t0_date is not None
+        # Maximum offset should be from HAM's third entry: base_date + 15s - 5s = base_date + 10s
+        expected_offset = base_date + pd.Timedelta(seconds=10)
+        assert session._t0_date == expected_offset.round('ms')
+
+    def test_calculate_t0_date_rounds_to_milliseconds(self):
+        """Test _calculate_t0_date rounds result to milliseconds"""
+        mock_event = self._create_mock_event()
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Create timestamp with microsecond precision
+        base_date = pd.Timestamp('2023-05-20 12:00:00.123456')
+
+        tel_data = {
+            'HAM': pd.DataFrame({
+                'Date': [base_date],
+                'Time': [pd.Timedelta(0)]
+            })
+        }
+
+        session._calculate_t0_date(tel_data)
+
+        assert session._t0_date is not None
+        # Should be rounded to ms: 123000 microseconds
+        expected = pd.Timestamp('2023-05-20 12:00:00.123000')
+        assert session._t0_date == expected
+
 
 class TestLaps:
     """Tests for Laps class"""
