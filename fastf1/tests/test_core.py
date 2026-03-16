@@ -1102,6 +1102,117 @@ class TestSession:
         assert any("Failed to load extended driver information!" in record.message
                    for record in caplog.records)
 
+    def test_load_drivers_results_no_data_from_both_sources(self, caplog):
+        """Test _load_drivers_results when both F1 API and Ergast return no data"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        mock_event.is_testing = Mock(return_value=False)
+        session = core.Session(event=mock_event, session_name='Race')
+        session.f1_api_support = True
+
+        # Mock both methods to return None
+        with patch.object(session, '_drivers_from_f1_api', return_value=None):
+            with patch.object(session, '_drivers_results_from_ergast', return_value=None):
+                session._load_drivers_results()
+
+        assert session._results is not None
+        assert isinstance(session._results, core.SessionResults)
+        assert any("Failed to load driver list and session results!" in record.message
+                   for record in caplog.records)
+
+    def test_load_drivers_results_only_ergast_data(self):
+        """Test _load_drivers_results when only Ergast data is available"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        mock_event.is_testing = Mock(return_value=False)
+        session = core.Session(event=mock_event, session_name='Race')
+        session.f1_api_support = True
+
+        # Create mock Ergast data
+        ergast_data = pd.DataFrame({
+            'DriverNumber': ['44', '33'],
+            'Abbreviation': ['HAM', 'VER'],
+            'FirstName': ['Lewis', 'Max'],
+            'LastName': ['Hamilton', 'Verstappen'],
+            'TeamName': ['Mercedes', 'Red Bull Racing'],
+            'FullName': ['Lewis Hamilton', 'Max Verstappen'],
+            'Position': [1, 2]
+        })
+        ergast_data = ergast_data.set_index('DriverNumber')
+
+        # Mock F1 API to return None, Ergast to return data
+        with patch.object(session, '_drivers_from_f1_api', return_value=None):
+            with patch.object(session, '_drivers_results_from_ergast', return_value=ergast_data):
+                session._load_drivers_results()
+
+        assert session._results is not None
+        assert isinstance(session._results, core.SessionResults)
+        assert len(session._results) == 2
+        assert '44' in session._results.index
+        assert '33' in session._results.index
+
+    def test_load_drivers_results_only_f1_data(self):
+        """Test _load_drivers_results when only F1 API data is available"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        mock_event.is_testing = Mock(return_value=False)
+        session = core.Session(event=mock_event, session_name='Race')
+        session.f1_api_support = True
+
+        # Create mock F1 data
+        f1_data = pd.DataFrame({
+            'DriverNumber': ['44', '33'],
+            'Abbreviation': ['HAM', 'VER'],
+            'FirstName': ['Lewis', 'Max'],
+            'LastName': ['Hamilton', 'Verstappen'],
+            'TeamName': ['Mercedes', 'Red Bull Racing'],
+            'FullName': ['Lewis Hamilton', 'Max Verstappen']
+        })
+        f1_data = f1_data.set_index('DriverNumber')
+
+        # Mock F1 API to return data, Ergast to return None
+        with patch.object(session, '_drivers_from_f1_api', return_value=f1_data):
+            with patch.object(session, '_drivers_results_from_ergast', return_value=None):
+                session._load_drivers_results()
+
+        assert session._results is not None
+        assert isinstance(session._results, core.SessionResults)
+        assert len(session._results) == 2
+        assert '44' in session._results.index
+        assert '33' in session._results.index
+
+    def test_load_drivers_results_duplicate_entries(self, caplog):
+        """Test _load_drivers_results warns about duplicate driver entries"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event()
+        mock_event.is_testing = Mock(return_value=False)
+        session = core.Session(event=mock_event, session_name='Race')
+        session.f1_api_support = True
+
+        # Create F1 data with duplicate entries
+        f1_data = pd.DataFrame({
+            'DriverNumber': ['44', '44', '33'],
+            'Abbreviation': ['HAM', 'HAM', 'VER'],
+            'FirstName': ['Lewis', 'Lewis', 'Max'],
+            'LastName': ['Hamilton', 'Hamilton', 'Verstappen'],
+            'TeamName': ['Mercedes', 'Mercedes', 'Red Bull Racing'],
+            'FullName': ['Lewis Hamilton', 'Lewis Hamilton', 'Max Verstappen']
+        })
+        f1_data = f1_data.set_index('DriverNumber')
+
+        # Mock F1 API to return data with duplicates, Ergast to return None
+        with patch.object(session, '_drivers_from_f1_api', return_value=f1_data):
+            with patch.object(session, '_drivers_results_from_ergast', return_value=None):
+                session._load_drivers_results()
+
+        assert session._results is not None
+        assert any("Session results contain duplicate entries for driver(s)" in record.message
+                   for record in caplog.records)
+
 
 class TestLaps:
     """Tests for Laps class"""
