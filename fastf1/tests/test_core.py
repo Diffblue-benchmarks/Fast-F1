@@ -771,6 +771,83 @@ class TestLaps:
             laps.pick_track_status('1', how='invalid')
         assert "Invalid value 'invalid' for kwarg 'how'" in str(excinfo.value)
 
+    def test_pick_quicklaps_default_threshold(self):
+        """Test pick_quicklaps with default threshold filters laps correctly"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4, 5],
+            'LapTime': [
+                pd.Timedelta('0 days 00:01:30.000'),  # 90.0s - fastest
+                pd.Timedelta('0 days 00:01:31.500'),  # 91.5s
+                pd.Timedelta('0 days 00:01:36.300'),  # 96.3s - at threshold (90 * 1.07)
+                pd.Timedelta('0 days 00:01:37.000'),  # 97.0s - above threshold
+                pd.Timedelta('0 days 00:01:40.000')   # 100.0s - above threshold
+            ]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_quicklaps()
+
+        # Default threshold is 1.07, so 90 * 1.07 = 96.3
+        # Laps must be strictly less than threshold
+        assert len(result) == 2
+        assert 1 in result['LapNumber'].values
+        assert 2 in result['LapNumber'].values
+        assert 3 not in result['LapNumber'].values  # Equal to threshold, not less
+        assert 4 not in result['LapNumber'].values
+        assert 5 not in result['LapNumber'].values
+
+    def test_pick_quicklaps_custom_threshold(self):
+        """Test pick_quicklaps with custom threshold"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3, 4],
+            'LapTime': [
+                pd.Timedelta('0 days 00:01:30.000'),  # 90.0s - fastest
+                pd.Timedelta('0 days 00:01:31.500'),  # 91.5s
+                pd.Timedelta('0 days 00:01:34.400'),  # 94.4s - just below 1.05 threshold (90 * 1.05 = 94.5)
+                pd.Timedelta('0 days 00:01:35.000')   # 95.0s - above 1.05 threshold
+            ]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_quicklaps(threshold=1.05)
+
+        # Custom threshold is 1.05, so 90 * 1.05 = 94.5
+        assert len(result) == 3
+        assert 1 in result['LapNumber'].values
+        assert 2 in result['LapNumber'].values
+        assert 3 in result['LapNumber'].values
+        assert 4 not in result['LapNumber'].values
+
+    def test_pick_quicklaps_all_laps_quick(self):
+        """Test pick_quicklaps when all laps are within threshold"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'LapTime': [
+                pd.Timedelta('0 days 00:01:30.000'),
+                pd.Timedelta('0 days 00:01:30.500'),
+                pd.Timedelta('0 days 00:01:31.000')
+            ]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_quicklaps()
+
+        assert len(result) == 3
+
+    def test_pick_quicklaps_no_quick_laps(self):
+        """Test pick_quicklaps when only one lap exists or no laps meet threshold"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1],
+            'LapTime': [pd.Timedelta('0 days 00:01:30.000')]
+        })
+        laps = core.Laps(laps_data)
+
+        result = laps.pick_quicklaps()
+
+        # With threshold 1.07, the single lap at 90s creates threshold at 96.3s
+        # The lap itself (90s) is less than 96.3s, so it should be included
+        assert len(result) == 1
+
 
 class TestLap:
     """Tests for Lap class"""
