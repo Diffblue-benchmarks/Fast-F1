@@ -391,6 +391,127 @@ class TestSession:
         expected = pd.Timestamp('2023-05-20 12:00:00.123000')
         assert session._t0_date == expected
 
+    def test_get_circuit_info_normal_case(self):
+        """Test get_circuit_info with normal circuit key"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event(year=2023)
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Set up session_info
+        session._session_info = {
+            'Meeting': {
+                'Circuit': {
+                    'Key': 7,
+                    'ShortName': 'Monaco'
+                }
+            }
+        }
+
+        # Mock laps with a fastest lap
+        mock_fastest_lap = Mock()
+        mock_laps = Mock()
+        mock_laps.pick_fastest.return_value = mock_fastest_lap
+        session._laps = mock_laps
+
+        # Mock get_circuit_info and CircuitInfo
+        mock_circuit_info = Mock()
+        mock_circuit_info.add_marker_distance = Mock()
+
+        with patch('fastf1.core.get_circuit_info', return_value=mock_circuit_info) as mock_get_circuit:
+            result = session.get_circuit_info()
+
+            # Verify get_circuit_info was called with correct parameters
+            mock_get_circuit.assert_called_once_with(year=2023, circuit_key=7)
+
+            # Verify add_marker_distance was called with fastest lap
+            mock_circuit_info.add_marker_distance.assert_called_once_with(
+                reference_lap=mock_fastest_lap
+            )
+
+            # Verify return value
+            assert result is mock_circuit_info
+
+    def test_get_circuit_info_mugello_special_case(self):
+        """Test get_circuit_info with Mugello circuit key conversion"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event(year=2020)
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Set up session_info with Mugello circuit key 149
+        session._session_info = {
+            'Meeting': {
+                'Circuit': {
+                    'Key': 149,
+                    'ShortName': 'Mugello'
+                }
+            }
+        }
+
+        # Mock laps with a fastest lap
+        mock_fastest_lap = Mock()
+        mock_laps = Mock()
+        mock_laps.pick_fastest.return_value = mock_fastest_lap
+        session._laps = mock_laps
+
+        # Mock get_circuit_info and CircuitInfo
+        mock_circuit_info = Mock()
+        mock_circuit_info.add_marker_distance = Mock()
+
+        with patch('fastf1.core.get_circuit_info', return_value=mock_circuit_info) as mock_get_circuit:
+            result = session.get_circuit_info()
+
+            # Verify get_circuit_info was called with converted circuit_key (146 instead of 149)
+            mock_get_circuit.assert_called_once_with(year=2020, circuit_key=146)
+
+            # Verify add_marker_distance was called
+            mock_circuit_info.add_marker_distance.assert_called_once_with(
+                reference_lap=mock_fastest_lap
+            )
+
+            # Verify return value
+            assert result is mock_circuit_info
+
+    def test_get_circuit_info_circuit_149_not_mugello(self):
+        """Test get_circuit_info with circuit key 149 but not Mugello (no conversion)"""
+        from unittest.mock import patch
+
+        mock_event = self._create_mock_event(year=2023)
+        session = core.Session(event=mock_event, session_name='Race')
+
+        # Set up session_info with circuit key 149 but different short name
+        session._session_info = {
+            'Meeting': {
+                'Circuit': {
+                    'Key': 149,
+                    'ShortName': 'SomeOtherCircuit'
+                }
+            }
+        }
+
+        # Mock laps with a fastest lap
+        mock_fastest_lap = Mock()
+        mock_laps = Mock()
+        mock_laps.pick_fastest.return_value = mock_fastest_lap
+        session._laps = mock_laps
+
+        # Mock get_circuit_info and CircuitInfo
+        mock_circuit_info = Mock()
+        mock_circuit_info.add_marker_distance = Mock()
+
+        with patch('fastf1.core.get_circuit_info', return_value=mock_circuit_info) as mock_get_circuit:
+            result = session.get_circuit_info()
+
+            # Verify get_circuit_info was called with original circuit_key (149, no conversion)
+            mock_get_circuit.assert_called_once_with(year=2023, circuit_key=149)
+
+            # Verify add_marker_distance was called
+            mock_circuit_info.add_marker_distance.assert_called_once()
+
+            # Verify return value
+            assert result is mock_circuit_info
+
 
 class TestLaps:
     """Tests for Laps class"""
