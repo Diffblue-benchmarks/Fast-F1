@@ -203,6 +203,69 @@ class TestTelemetry:
         assert isinstance(result, pd.Series)
         assert result.empty
 
+    def test_add_relative_distance_with_distance_column(self):
+        """Test add_relative_distance when Distance column exists"""
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta([0, 1, 2, 3], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0],
+            'Distance': [0.0, 100.0, 200.0, 300.0]
+        })
+        telemetry = core.Telemetry(data)
+
+        result = telemetry.add_relative_distance()
+
+        assert 'RelativeDistance' in result.columns
+        assert result['RelativeDistance'].iloc[0] == 0.0
+        assert result['RelativeDistance'].iloc[-1] == 1.0
+        # Verify intermediate values are proportional
+        assert 0.0 < result['RelativeDistance'].iloc[1] < 1.0
+
+    def test_add_relative_distance_without_distance_column(self):
+        """Test add_relative_distance when Distance column doesn't exist"""
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta([0, 1, 2, 3], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0]
+        })
+        telemetry = core.Telemetry(data)
+
+        result = telemetry.add_relative_distance()
+
+        assert 'RelativeDistance' in result.columns
+        assert result['RelativeDistance'].iloc[0] == 0.0
+        assert result['RelativeDistance'].iloc[-1] == 1.0
+
+    def test_add_relative_distance_drop_existing_true(self):
+        """Test add_relative_distance with drop_existing=True when column exists"""
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta([0, 1, 2, 3], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0],
+            'Distance': [0.0, 100.0, 200.0, 300.0],
+            'RelativeDistance': [0.0, 0.2, 0.4, 0.6]  # Old values
+        })
+        telemetry = core.Telemetry(data)
+
+        result = telemetry.add_relative_distance(drop_existing=True)
+
+        assert 'RelativeDistance' in result.columns
+        # Should recalculate, so last value should be 1.0, not 0.6
+        assert result['RelativeDistance'].iloc[-1] == 1.0
+        assert result['RelativeDistance'].iloc[0] == 0.0
+
+    def test_add_relative_distance_drop_existing_false(self):
+        """Test add_relative_distance with drop_existing=False when column exists"""
+        data = pd.DataFrame({
+            'Time': pd.to_timedelta([0, 1, 2, 3], unit='s'),
+            'Speed': [100.0, 110.0, 120.0, 130.0],
+            'RelativeDistance': [0.0, 0.2, 0.4, 0.6]
+        })
+        telemetry = core.Telemetry(data)
+
+        result = telemetry.add_relative_distance(drop_existing=False)
+
+        # Should return self unchanged
+        assert result is telemetry
+        assert result['RelativeDistance'].iloc[-1] == 0.6
+
 
 class TestSession:
     """Tests for Session class"""
