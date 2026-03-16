@@ -951,6 +951,49 @@ class TestLaps:
         assert len(result) == 0
         assert isinstance(result, core.Laps)
 
+    def test_pick_driver_string_identifier_with_deprecation(self):
+        """Test pick_driver with string identifier and verify deprecation warning"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'HAM'],
+            'DriverNumber': ['44', '1', '16', '44'],
+            'LapNumber': [1, 2, 3, 4]
+        })
+        laps = core.Laps(laps_data)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = laps.pick_driver('HAM')
+
+            assert len(w) == 1
+            assert issubclass(w[0].category, FutureWarning)
+            assert "pick_driver is deprecated" in str(w[0].message)
+            assert "pick_drivers" in str(w[0].message)
+
+        assert len(result) == 2
+        assert all(result['Driver'] == 'HAM')
+        assert list(result['LapNumber']) == [1, 4]
+
+    def test_pick_driver_int_identifier_with_deprecation(self):
+        """Test pick_driver with integer identifier and verify deprecation warning"""
+        laps_data = pd.DataFrame({
+            'Driver': ['HAM', 'VER', 'LEC', 'VER'],
+            'DriverNumber': ['44', '1', '16', '1'],
+            'LapNumber': [1, 2, 3, 4]
+        })
+        laps = core.Laps(laps_data)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = laps.pick_driver(1)
+
+            assert len(w) == 1
+            assert issubclass(w[0].category, FutureWarning)
+            assert "pick_driver is deprecated" in str(w[0].message)
+
+        assert len(result) == 2
+        assert all(result['DriverNumber'] == '1')
+        assert list(result['LapNumber']) == [2, 4]
+
 
 class TestLap:
     """Tests for Lap class"""
