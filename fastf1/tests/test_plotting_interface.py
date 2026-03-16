@@ -2,7 +2,7 @@ import pytest
 import warnings
 from unittest.mock import Mock, patch, MagicMock
 
-from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend
+from fastf1.plotting._interface import override_team_constants, add_sorted_driver_legend, list_team_names
 from fastf1.plotting._base import Team, TeamColorConstants, Driver, DriverTeamMapping
 
 
@@ -487,3 +487,99 @@ class TestAddSortedDriverLegend:
             # Verify kwargs were passed through
             call_args = mock_ax.legend.call_args
             assert call_args[1] == {'loc': 'best', 'fontsize': 12}
+
+
+class TestListTeamNames:
+    """Tests for list_team_names function."""
+
+    def test_list_team_names_default(self):
+        """Test list_team_names returns full team names by default."""
+        # This test targets lines 787, 793
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Mercedes-AMG Petronas F1 Team",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+        team2 = Team(
+            name="Scuderia Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+        team3 = Team(
+            name="Red Bull Racing",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+
+        # Create mock driver-team mapping with teams_by_normalized dict
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "mercedes": team1,
+            "ferrari": team2,
+            "red bull": team3
+        }
+
+        # Mock _get_driver_team_mapping
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm):
+            # Call the function without short parameter (default: False)
+            result = list_team_names(mock_session)
+
+            # Verify the result contains full team names
+            assert len(result) == 3
+            assert "Mercedes-AMG Petronas F1 Team" in result
+            assert "Scuderia Ferrari" in result
+            assert "Red Bull Racing" in result
+
+    def test_list_team_names_short(self):
+        """Test list_team_names returns short team names when short=True."""
+        # This test targets lines 787, 789, 790
+
+        # Create mock session
+        mock_session = Mock()
+
+        # Create mock teams
+        team1 = Team(
+            name="Mercedes-AMG Petronas F1 Team",
+            normalized_name="mercedes",
+            short_name="Mercedes",
+            colors=TeamColorConstants(official="#00d2be", fastf1="#00d2be")
+        )
+        team2 = Team(
+            name="Scuderia Ferrari",
+            normalized_name="ferrari",
+            short_name="Ferrari",
+            colors=TeamColorConstants(official="#dc0000", fastf1="#dc0000")
+        )
+        team3 = Team(
+            name="Red Bull Racing",
+            normalized_name="red bull",
+            short_name="Red Bull",
+            colors=TeamColorConstants(official="#0600ef", fastf1="#0600ef")
+        )
+
+        # Create mock driver-team mapping with teams_by_normalized dict
+        mock_dtm = Mock()
+        mock_dtm.teams_by_normalized = {
+            "mercedes": team1,
+            "ferrari": team2,
+            "red bull": team3
+        }
+
+        # Mock _get_driver_team_mapping
+        with patch('fastf1.plotting._interface._get_driver_team_mapping', return_value=mock_dtm):
+            # Call the function with short=True
+            result = list_team_names(mock_session, short=True)
+
+            # Verify the result contains short team names
+            assert len(result) == 3
+            assert "Mercedes" in result
+            assert "Ferrari" in result
+            assert "Red Bull" in result
