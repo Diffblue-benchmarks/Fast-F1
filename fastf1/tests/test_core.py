@@ -1393,6 +1393,43 @@ class TestLaps:
 
         assert result is mock_result
 
+    def test_join_propagates_metadata(self):
+        """Test that join propagates metadata"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'Driver': ['HAM', 'VER', 'LEC']
+        })
+        additional_data = pd.DataFrame({
+            'FastestLap': [True, False, False]
+        }, index=[0, 1, 2])
+
+        mock_session = Mock()
+        laps = core.Laps(laps_data, session=mock_session)
+        result = laps.join(additional_data)
+
+        assert result.session is mock_session
+        assert 'FastestLap' in result.columns
+        assert len(result) == 3
+
+    def test_merge_propagates_metadata(self):
+        """Test that merge propagates metadata"""
+        laps_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'Driver': ['HAM', 'VER', 'LEC']
+        })
+        additional_data = pd.DataFrame({
+            'LapNumber': [1, 2, 3],
+            'TyreCompound': ['SOFT', 'MEDIUM', 'SOFT']
+        })
+
+        mock_session = Mock()
+        laps = core.Laps(laps_data, session=mock_session)
+        result = laps.merge(additional_data, on='LapNumber')
+
+        assert result.session is mock_session
+        assert 'TyreCompound' in result.columns
+        assert len(result) == 3
+
 
 class TestLap:
     """Tests for Lap class"""
