@@ -787,3 +787,209 @@ def test_run_auth_server_waits_for_auth_finished_event(reset_subscription_token)
 
                             # Verify shutdown was called after wait
                             mock_httpd.shutdown.assert_called_once()
+
+
+def test_auth_handler_do_post_successful_auth(reset_subscription_token):
+    """Test AuthHandler.do_POST processes authentication POST request correctly."""
+    import fastf1.internals.f1auth as f1auth
+    import json
+    import io
+
+    # Prepare test data
+    subscription_token = "test_subscription_token_xyz"
+    login_session_data = {
+        "data": {
+            "subscriptionToken": subscription_token
+        }
+    }
+    login_session_encoded = json.dumps(login_session_data)
+    post_body = {
+        "loginSession": login_session_encoded
+    }
+    post_data = json.dumps(post_body).encode('utf-8')
+
+    # Create a handler instance without calling __init__
+    handler = f1auth.AuthHandler.__new__(f1auth.AuthHandler)
+
+    # Mock the request attributes
+    handler.path = '/auth'
+    handler.headers = {'Content-Length': str(len(post_data))}
+    handler.rfile = io.BytesIO(post_data)
+
+    # Mock the response methods
+    handler.send_response = MagicMock()
+    handler.send_header = MagicMock()
+    handler.end_headers = MagicMock()
+    handler.wfile = MagicMock()
+    handler.wfile.write = MagicMock()
+
+    # Reset the auth_finished event
+    f1auth._auth_finished.clear()
+
+    # Call do_POST
+    handler.do_POST()
+
+    # Verify response was sent correctly
+    handler.send_response.assert_called_once_with(200)
+
+    # Verify CORS headers were set
+    header_calls = [call[0] for call in handler.send_header.call_args_list]
+    assert ('Content-Type', 'application/json') in header_calls
+    assert ('Access-Control-Allow-Origin', '*') in header_calls
+    assert ('Access-Control-Allow-Methods', 'POST, OPTIONS') in header_calls
+    assert ('Access-Control-Allow-Headers', 'Content-Type') in header_calls
+
+    handler.end_headers.assert_called_once()
+
+    # Verify response body
+    handler.wfile.write.assert_called_once_with(json.dumps({"status": "ok"}).encode())
+
+    # Verify global token was set
+    assert f1auth._subscription_token == subscription_token
+
+    # Verify auth_finished event was set
+    assert f1auth._auth_finished.is_set()
+
+
+def test_auth_handler_do_post_with_url_encoded_cookie(reset_subscription_token):
+    """Test AuthHandler.do_POST handles URL-encoded login session data."""
+    import fastf1.internals.f1auth as f1auth
+    import json
+    import urllib.parse
+    import io
+
+    # Prepare test data with URL encoding
+    subscription_token = "encoded_token_123"
+    login_session_data = {
+        "data": {
+            "subscriptionToken": subscription_token,
+            "extra": "field"
+        }
+    }
+    login_session_encoded = urllib.parse.quote(json.dumps(login_session_data))
+    post_body = {
+        "loginSession": login_session_encoded
+    }
+    post_data = json.dumps(post_body).encode('utf-8')
+
+    # Create a handler instance without calling __init__
+    handler = f1auth.AuthHandler.__new__(f1auth.AuthHandler)
+
+    # Mock the request attributes
+    handler.path = '/auth'
+    handler.headers = {'Content-Length': str(len(post_data))}
+    handler.rfile = io.BytesIO(post_data)
+
+    # Mock the response methods
+    handler.send_response = MagicMock()
+    handler.send_header = MagicMock()
+    handler.end_headers = MagicMock()
+    handler.wfile = MagicMock()
+    handler.wfile.write = MagicMock()
+
+    # Reset the auth_finished event
+    f1auth._auth_finished.clear()
+
+    # Call do_POST
+    handler.do_POST()
+
+    # Verify global token was set correctly from URL-decoded data
+    assert f1auth._subscription_token == subscription_token
+
+    # Verify auth_finished event was set
+    assert f1auth._auth_finished.is_set()
+
+
+def test_auth_handler_do_post_with_missing_subscription_token(reset_subscription_token):
+    """Test AuthHandler.do_POST handles missing subscriptionToken in data."""
+    import fastf1.internals.f1auth as f1auth
+    import json
+    import io
+
+    # Prepare test data without subscriptionToken
+    login_session_data = {
+        "data": {
+            "otherField": "value"
+        }
+    }
+    login_session_encoded = json.dumps(login_session_data)
+    post_body = {
+        "loginSession": login_session_encoded
+    }
+    post_data = json.dumps(post_body).encode('utf-8')
+
+    # Create a handler instance without calling __init__
+    handler = f1auth.AuthHandler.__new__(f1auth.AuthHandler)
+
+    # Mock the request attributes
+    handler.path = '/auth'
+    handler.headers = {'Content-Length': str(len(post_data))}
+    handler.rfile = io.BytesIO(post_data)
+
+    # Mock the response methods
+    handler.send_response = MagicMock()
+    handler.send_header = MagicMock()
+    handler.end_headers = MagicMock()
+    handler.wfile = MagicMock()
+    handler.wfile.write = MagicMock()
+
+    # Reset the auth_finished event
+    f1auth._auth_finished.clear()
+
+    # Call do_POST
+    handler.do_POST()
+
+    # Verify response was still sent
+    handler.send_response.assert_called_once_with(200)
+    handler.wfile.write.assert_called_once()
+
+    # Verify global token is None (not found in data)
+    assert f1auth._subscription_token is None
+
+    # Verify auth_finished event was still set
+    assert f1auth._auth_finished.is_set()
+
+
+def test_auth_handler_do_post_with_empty_data_field(reset_subscription_token):
+    """Test AuthHandler.do_POST handles empty data field in login session."""
+    import fastf1.internals.f1auth as f1auth
+    import json
+    import io
+
+    # Prepare test data with empty data field
+    login_session_data = {}
+    login_session_encoded = json.dumps(login_session_data)
+    post_body = {
+        "loginSession": login_session_encoded
+    }
+    post_data = json.dumps(post_body).encode('utf-8')
+
+    # Create a handler instance without calling __init__
+    handler = f1auth.AuthHandler.__new__(f1auth.AuthHandler)
+
+    # Mock the request attributes
+    handler.path = '/auth'
+    handler.headers = {'Content-Length': str(len(post_data))}
+    handler.rfile = io.BytesIO(post_data)
+
+    # Mock the response methods
+    handler.send_response = MagicMock()
+    handler.send_header = MagicMock()
+    handler.end_headers = MagicMock()
+    handler.wfile = MagicMock()
+    handler.wfile.write = MagicMock()
+
+    # Reset the auth_finished event
+    f1auth._auth_finished.clear()
+
+    # Call do_POST
+    handler.do_POST()
+
+    # Verify response was sent
+    handler.send_response.assert_called_once_with(200)
+
+    # Verify global token is None
+    assert f1auth._subscription_token is None
+
+    # Verify auth_finished event was set
+    assert f1auth._auth_finished.is_set()
